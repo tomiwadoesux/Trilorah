@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
-import { Upload, Scissors, MonitorPlay, Loader2 } from "lucide-react";
+import { Upload, Scissors, MonitorPlay, Loader2, Plus } from "lucide-react";
+import { useAppStore } from "../../stores/appStore";
+import { useServiceFlowStore } from "../../stores/serviceFlowStore";
 
 export default function VideoEditorTab() {
   const [loaded, setLoaded] = useState(false);
@@ -11,6 +13,7 @@ export default function VideoEditorTab() {
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoURL, setVideoURL] = useState<string>("");
+  const [trimmedURL, setTrimmedURL] = useState<string>("");
   const [duration, setDuration] = useState(0);
 
   const [startTime, setStartTime] = useState(0);
@@ -113,10 +116,21 @@ export default function VideoEditorTab() {
         type: "video/mp4",
       });
       const url = URL.createObjectURL(blob);
+      setTrimmedURL(url);
 
+      const trimmedName = `trim-${videoFile.name}`;
+
+      useAppStore.getState().addCustomTheme({
+        id: crypto.randomUUID(),
+        name: trimmedName,
+        type: "video",
+        url: url,
+      });
+
+      // Also trigger download as before
       const a = document.createElement("a");
       a.href = url;
-      a.download = `trim-${videoFile.name}`;
+      a.download = trimmedName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -260,34 +274,63 @@ export default function VideoEditorTab() {
                 <button
                   onClick={() => {
                     setVideoURL("");
+                    setTrimmedURL("");
                     setVideoFile(null);
                   }}
                   disabled={isLoading}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-sm bg-gradient-to-br from-gray-400/10 to-gray-400/5 border-2 border-gray-400/20 hover:border-gray-400/40 text-gray-300 font-bold rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleTrim}
-                  disabled={!loaded || isLoading}
-                  className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-lg transition-all ${
-                    !loaded || isLoading
-                      ? "bg-[#3E9B4F]/50 opacity-50 cursor-not-allowed"
-                      : "bg-[#3E9B4F] hover:bg-[#4fb85f] hover:shadow-[0_0_15px_rgba(62,155,79,0.3)]"
-                  }`}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      Processing {progress}%
-                    </>
-                  ) : (
-                    <>
-                      <Scissors size={16} />
-                      Trim & Save
-                    </>
-                  )}
-                </button>
+                {trimmedURL ? (
+                  <button
+                    onClick={() => {
+                      useServiceFlowStore.getState().addToFlow([
+                        {
+                          id: crypto.randomUUID(),
+                          type: "theme",
+                          title: `trim-${videoFile?.name || "video"}`,
+                          subtitle: "Video Clip",
+                          data: {
+                            id: crypto.randomUUID(),
+                            name: `trim-${videoFile?.name || "video"}`,
+                            type: "video",
+                            url: trimmedURL,
+                          },
+                        },
+                      ]);
+                      setVideoURL("");
+                      setTrimmedURL("");
+                      setVideoFile(null);
+                    }}
+                    className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-[#3E9B4F] hover:bg-[#4fb85f] rounded-lg shadow-lg transition-all"
+                  >
+                    <Plus size={16} />
+                    Add to Today
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleTrim}
+                    disabled={!loaded || isLoading}
+                    className={`flex items-center gap-2 px-5 py-2 text-sm font-bold text-[#3E9B4F] rounded-lg transition-all ${
+                      !loaded || isLoading
+                        ? "bg-gradient-to-br from-[#3E9B4F]/10 to-[#3E9B4F]/5 border-2 border-[#3E9B4F]/15 opacity-50 cursor-not-allowed text-[#3E9B4F]/50"
+                        : "bg-gradient-to-br from-[#3E9B4F]/20 to-[#3E9B4F]/5 border-2 border-[#3E9B4F]/30 hover:border-[#3E9B4F]/60"
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Processing {progress}%
+                      </>
+                    ) : (
+                      <>
+                        <Scissors size={16} />
+                        Trim & Save
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 

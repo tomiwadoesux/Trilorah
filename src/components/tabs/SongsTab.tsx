@@ -56,7 +56,7 @@ export default function SongsTab() {
         </div>
         <button
           onClick={() => setShowAddSongModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#3E9B4F] hover:bg-[#4fb85f] rounded-lg text-sm font-medium text-white transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-[#3E9B4F]/20 to-[#3E9B4F]/5 border-2 border-[#3E9B4F]/30 hover:border-[#3E9B4F]/60 rounded-lg text-sm font-bold text-[#3E9B4F] transition-colors"
         >
           <Plus size={16} />
           Add Song
@@ -255,14 +255,14 @@ export default function SongsTab() {
             <div className="p-4 border-t border-white/10 flex justify-end gap-3">
               <button
                 onClick={clearModal}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-sm bg-gradient-to-br from-gray-400/10 to-gray-400/5 border-2 border-gray-400/20 hover:border-gray-400/40 text-gray-300 font-bold rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={addSong}
                 disabled={!newSongTitle.trim() || !newSongLyrics.trim()}
-                className="px-6 py-2 bg-[#3E9B4F] hover:bg-[#4fb85f] disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium text-white transition-colors"
+                className="px-6 py-2 bg-gradient-to-br from-[#3E9B4F]/20 to-[#3E9B4F]/5 border-2 border-[#3E9B4F]/30 hover:border-[#3E9B4F]/60 disabled:from-gray-700/20 disabled:to-gray-700/5 disabled:border-gray-700/30 disabled:text-gray-500 rounded-lg text-sm font-bold text-[#3E9B4F] transition-colors"
               >
                 Add Song
               </button>

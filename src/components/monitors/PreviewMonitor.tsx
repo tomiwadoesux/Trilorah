@@ -3,6 +3,8 @@ import {
   Mic,
   ChevronLeft,
   ChevronRight,
+  MonitorUp,
+  MonitorOff,
 } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { useSongStore } from "../../stores/songStore";
@@ -30,6 +32,8 @@ export default function PreviewMonitor({
     setPreviewVerse,
     setLiveVerse,
     setShowLiveText,
+    pushPreviewToLive,
+    clearLiveText,
   } = useAppStore();
 
   const {
@@ -63,6 +67,28 @@ export default function PreviewMonitor({
           selectedVersion={selectedVersion}
           isLive={false}
         />
+        <div className="absolute bottom-2 left-2 flex gap-1.5 z-10 bg-black/40 p-1 rounded-lg backdrop-blur-md border border-white/10">
+          <button
+            onClick={pushPreviewToLive}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-br from-[#3E9B4F]/20 to-[#3E9B4F]/5 border-2 border-[#3E9B4F]/30 hover:border-[#3E9B4F]/60 text-[#3E9B4F] rounded-md shadow-lg transition-colors"
+            title="Push to Live"
+          >
+            <MonitorUp size={14} />
+            <span className="text-[10px] uppercase font-bold tracking-widest">
+              Live
+            </span>
+          </button>
+          <button
+            onClick={clearLiveText}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-br from-gray-400/10 to-gray-400/5 border-2 border-gray-400/20 hover:border-gray-400/40 text-gray-300 rounded-md shadow-lg transition-colors"
+            title="Clear Screen (Show Background Only)"
+          >
+            <MonitorOff size={14} />
+            <span className="text-[10px] uppercase font-bold tracking-widest text-gray-300">
+              Clear
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Song Slide Navigation - only when in Songs tab */}
@@ -143,7 +169,7 @@ export default function PreviewMonitor({
             onClick={() => {
               const newIndex = Math.min(
                 selectedSong.slides.length - 1,
-                selectedSlideIndex + 1
+                selectedSlideIndex + 1,
               );
               setSelectedSlideIndex(newIndex);
               const newVerse = {

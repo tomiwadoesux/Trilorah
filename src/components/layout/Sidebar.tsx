@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   Mic,
   List,
@@ -8,7 +8,17 @@ import {
   Play,
   Loader2,
   X,
+  ChevronDown,
+  ChevronRight,
+  Film,
 } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "../ui/context-menu";
 import { useAppStore } from "../../stores/appStore";
 import { useServiceFlowStore } from "../../stores/serviceFlowStore";
 import { useScriptureStore } from "../../stores/scriptureStore";
@@ -26,6 +36,10 @@ export function Sidebar({
   stopWhisperRecording,
   detectVerseFromTranscript,
 }: SidebarProps) {
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [noteText, setNoteText] = useState("");
+
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const { mode, setMode, liveVerse } = useAppStore();
   const {
     serviceFlow,
@@ -34,6 +48,12 @@ export function Sidebar({
     selectedItems,
     handleMultiSelectClick,
     removeFromFlow,
+    moveItemUp,
+    moveItemDown,
+    duplicateItem,
+    expandedItems,
+    toggleItemExpanded,
+    setAllExpanded,
   } = useServiceFlowStore();
   const { history } = useScriptureStore();
 
@@ -48,8 +68,6 @@ export function Sidebar({
     selectedDeviceId,
     setSelectedDeviceId,
   } = useAsrStore();
-
-  const mediaInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragStart = (e: React.DragEvent, item: ServiceItem) => {
     e.dataTransfer.setData("application/json", JSON.stringify(item));
@@ -135,9 +153,20 @@ export function Sidebar({
             </span>
           )}
         </button>
+        <button
+          onClick={() => setMode("media")}
+          className={`w-full flex items-center gap-3 p-2 rounded text-sm font-medium transition-all ${
+            mode === "media"
+              ? "bg-[#1a1a1a] text-[#3E9B4F] border border-[#3E9B4F]/20"
+              : "text-gray-400 hover:bg-white/5"
+          }`}
+        >
+          <Film size={14} />
+          Media
+        </button>
       </div>
 
-      {mode === "worship" ? (
+      {mode === "worship" && (
         <>
           <div className="flex gap-2 px-4 py-2 border-b border-white/10 bg-[#0a0a0a]">
             <button
@@ -154,24 +183,69 @@ export function Sidebar({
               onChange={handleMediaUpload}
             />
             <button
-              onClick={() => {
-                const noteText = prompt("Enter note text:", "New Note");
-                if (noteText) {
-                  const newNote: ServiceItem = {
-                    id: crypto.randomUUID(),
-                    type: "note",
-                    title: "Note",
-                    subtitle: noteText,
-                    data: { text: noteText },
-                  };
-                  useServiceFlowStore.getState().addToFlow([newNote]);
-                }
-              }}
+              onClick={() => setIsAddingNote(true)}
               className="flex-1 bg-[#1a1a1a] border border-white/10 hover:border-yellow-500/50 text-xs text-gray-400 hover:text-white py-1.5 rounded flex items-center justify-center gap-2 transition-all"
             >
               <Plus size={12} className="text-yellow-500" /> Add Note
             </button>
           </div>
+
+          {isAddingNote && (
+            <div className="p-3 border-b border-white/10 bg-[#111]">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Write your note here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && noteText.trim()) {
+                    const newNote: ServiceItem = {
+                      id: crypto.randomUUID(),
+                      type: "note",
+                      title: "Note",
+                      subtitle: noteText.trim(),
+                      data: { text: noteText.trim() },
+                    };
+                    useServiceFlowStore.getState().addToFlow([newNote]);
+                    setNoteText("");
+                    setIsAddingNote(false);
+                  } else if (e.key === "Escape") {
+                    setIsAddingNote(false);
+                  }
+                }}
+                className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500/50 mb-2"
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setIsAddingNote(false)}
+                  className="px-2 py-1 text-[10px] text-gray-500 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (noteText.trim()) {
+                      const newNote: ServiceItem = {
+                        id: crypto.randomUUID(),
+                        type: "note",
+                        title: "Note",
+                        subtitle: noteText.trim(),
+                        data: { text: noteText.trim() },
+                      };
+                      useServiceFlowStore.getState().addToFlow([newNote]);
+                      setNoteText("");
+                      setIsAddingNote(false);
+                    }
+                  }}
+                  className="px-3 py-1 text-[10px] bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 rounded border border-yellow-500/30 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+
           <div
             className="flex-1 overflow-y-auto p-2 space-y-1"
             onDragOver={handleFlowDragOver}
@@ -183,61 +257,174 @@ export function Sidebar({
                 <span>Drag items here</span>
               </div>
             )}
-            {serviceFlow.map((item) => (
-              <div
-                key={item.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, item)}
-                onClick={(e) => {
-                  const isSelect = handleMultiSelectClick(
-                    item.id,
-                    serviceFlow.map((i) => i.id),
-                    e,
-                  );
-                  if (item.type === "note" && isSelect) {
-                    const newText = prompt(
-                      "Edit note:",
-                      item.data.text || item.subtitle,
-                    );
-                    if (newText) {
-                      useServiceFlowStore
-                        .getState()
-                        .updateNoteInFlow(item.id, newText);
-                    }
-                  } else if (isSelect) {
-                    playFlowItem(item);
-                  }
-                }}
-                className={`group relative p-3 rounded cursor-pointer border transition-all ${
-                  selectedItems.has(item.id)
-                    ? "bg-[#1a1a1a] border-[#3E9B4F]/50 shadow-lg"
-                    : "bg-transparent border-transparent hover:bg-white/5"
-                }`}
-              >
-                <div className="flex gap-3 items-center">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-200 truncate group-hover:text-[#3E9B4F] transition-colors">
-                      {item.title}
-                    </div>
-                    {item.subtitle && (
-                      <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                        {item.subtitle}
+            {serviceFlow.map((item, index) => {
+              const isExpanded = expandedItems.has(item.id);
+              const isExpandable =
+                item.type === "presentation" || item.type === "song";
+
+              return (
+                <ContextMenu key={item.id}>
+                  <ContextMenuTrigger asChild>
+                    <div
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      onClick={(e) => {
+                        const isSelect = handleMultiSelectClick(
+                          item.id,
+                          serviceFlow.map((i) => i.id),
+                          e,
+                        );
+                        if (item.type === "note" && isSelect) {
+                          const newText = prompt(
+                            "Edit note:",
+                            item.data.text || item.subtitle,
+                          );
+                          if (newText) {
+                            useServiceFlowStore
+                              .getState()
+                              .updateNoteInFlow(item.id, newText);
+                          }
+                        } else if (isSelect) {
+                          playFlowItem(item);
+                        }
+                      }}
+                      className={`group relative p-3 rounded cursor-pointer border transition-all ${
+                        selectedItems.has(item.id)
+                          ? "bg-[#1a1a1a] border-[#3E9B4F]/50 shadow-lg"
+                          : "bg-transparent border-transparent hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex gap-3 items-center">
+                        {isExpandable ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleItemExpanded(item.id);
+                            }}
+                            className="text-gray-500 hover:text-white mt-0.5"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown size={14} />
+                            ) : (
+                              <ChevronRight size={14} />
+                            )}
+                          </button>
+                        ) : (
+                          <div className="w-[14px]" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-200 truncate group-hover:text-[#3E9B4F] transition-colors">
+                            {item.title}
+                          </div>
+                          {item.subtitle && (
+                            <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                              {item.subtitle}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromFlow(item.id);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove from flow"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+
+                      {/* Expanded Content Area */}
+                      {isExpanded && isExpandable && (
+                        <div className="mt-2 pl-[26px] pr-2 pb-1 text-xs text-gray-400 space-y-1">
+                          {item.type === "song" &&
+                            item.data.slides?.map(
+                              (slide: string, i: number) => (
+                                <div
+                                  key={i}
+                                  className="truncate bg-black/20 p-1.5 rounded border border-white/5"
+                                >
+                                  <span className="text-[#3E9B4F] mr-2 text-[10px]">
+                                    {i + 1}
+                                  </span>
+                                  {slide.length > 50
+                                    ? slide.substring(0, 50) + "..."
+                                    : slide}
+                                </div>
+                              ),
+                            )}
+                          {item.type === "presentation" && (
+                            <div className="flex flex-wrap gap-2">
+                              {item.data.slides?.map(
+                                (slide: string, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="w-16 h-10 bg-black/50 border border-white/10 rounded relative overflow-hidden group/slide"
+                                  >
+                                    {/* Simple placeholder for slides if no real local image */}
+                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-600">
+                                      Slide {i + 1}
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-48 bg-[#111] border-white/10 text-gray-200">
+                    <ContextMenuItem
+                      onClick={() => moveItemUp(item.id)}
+                      disabled={index === 0}
+                      className="hover:bg-white/10 focus:bg-[#3E9B4F]/20 focus:text-[#3E9B4F] cursor-pointer"
+                    >
+                      Move item up
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => moveItemDown(item.id)}
+                      disabled={index === serviceFlow.length - 1}
+                      className="hover:bg-white/10 focus:bg-[#3E9B4F]/20 focus:text-[#3E9B4F] cursor-pointer"
+                    >
+                      Move item down
+                    </ContextMenuItem>
+                    <ContextMenuSeparator className="bg-white/10" />
+                    <ContextMenuItem
+                      onClick={() => duplicateItem(item.id)}
+                      className="hover:bg-white/10 focus:bg-[#3E9B4F]/20 focus:text-[#3E9B4F] cursor-pointer"
+                    >
+                      Duplicate
+                    </ContextMenuItem>
+                    {isExpandable && (
+                      <ContextMenuItem
+                        onClick={() => toggleItemExpanded(item.id)}
+                        className="hover:bg-white/10 focus:bg-[#3E9B4F]/20 focus:text-[#3E9B4F] cursor-pointer"
+                      >
+                        Expand / Collapse Item
+                      </ContextMenuItem>
                     )}
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFromFlow(item.id);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded opacity-0 group-hover:opacity-100 transition-all"
-                  title="Remove from flow"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+                    <ContextMenuSeparator className="bg-white/10" />
+                    <ContextMenuItem
+                      onClick={() => setAllExpanded(true)}
+                      className="hover:bg-white/10 focus:bg-[#3E9B4F]/20 focus:text-[#3E9B4F] cursor-pointer"
+                    >
+                      Expand all items
+                    </ContextMenuItem>
+                    <ContextMenuSeparator className="bg-white/10" />
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromFlow(item.id);
+                      }}
+                      className="text-red-400 focus:bg-red-400/20 focus:text-red-400 cursor-pointer"
+                    >
+                      Remove from flow
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })}
           </div>
           {serviceFlow.length > 0 && (
             <div className="p-3 border-t border-white/10">
@@ -250,7 +437,9 @@ export function Sidebar({
             </div>
           )}
         </>
-      ) : (
+      )}
+
+      {mode === "sermon" && (
         <div className="flex-1 overflow-y-auto bg-[#0a0a0a] flex flex-col">
           <div className="p-4 border-b border-white/5 sticky top-0 bg-[#0a0a0a]/90 backdrop-blur z-10 space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 flex items-center gap-2">
@@ -399,6 +588,104 @@ export function Sidebar({
                 Speak references to see them here
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {mode === "media" && (
+        <div className="flex-1 overflow-y-auto bg-[#0a0a0a] flex flex-col p-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">
+            Available Media
+          </h3>
+          <div className="flex-1">
+            {(() => {
+              const customThemes = useAppStore.getState().customThemes;
+
+              const flowMedia = serviceFlow
+                .map((f) => f.data)
+                .filter((d) => d?.type === "image" || d?.type === "video");
+
+              // Deduplicate based on ID or URL
+              const allMediaElements = [...customThemes, ...flowMedia];
+              const uniqueMedia = allMediaElements.filter(
+                (v, i, a) =>
+                  a.findIndex(
+                    (t) =>
+                      (t?.url === v?.url && !!t?.url) ||
+                      (t?.id === v?.id && !!t?.id),
+                  ) === i,
+              );
+
+              if (uniqueMedia.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center h-40 text-gray-600 text-xs border border-dashed border-white/5 rounded-lg">
+                    <Film size={24} className="mb-2 opacity-50" />
+                    No media found
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex flex-col gap-3">
+                  {uniqueMedia.map((m, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-[#111] rounded-lg overflow-hidden border border-white/5 group shadow-xl"
+                    >
+                      <div className="aspect-video w-full bg-black relative">
+                        {m?.type === "video" || m?.name?.includes("trim-") ? (
+                          <div className="relative w-full h-full">
+                            <video
+                              src={m?.url || m?.backgroundUrl}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 right-2 bg-black/60 rounded px-1.5 py-0.5 border border-white/10 text-[8px] font-bold text-white uppercase tracking-wider backdrop-blur-sm">
+                              VIDEO
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={m?.url || m?.backgroundUrl}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 right-2 bg-black/60 rounded px-1.5 py-0.5 border border-white/10 text-[8px] font-bold text-white uppercase tracking-wider backdrop-blur-sm">
+                              IMAGE
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-all">
+                          <h4 className="text-sm font-bold text-white truncate drop-shadow-md">
+                            {m?.name || m?.title || "Media File"}
+                          </h4>
+                          <button
+                            onClick={() => {
+                              useServiceFlowStore.getState().addToFlow([
+                                {
+                                  id: crypto.randomUUID(),
+                                  type: "theme",
+                                  title: m?.name || m?.title || "Media",
+                                  subtitle:
+                                    m?.type === "video" ||
+                                    m?.name?.includes("trim-")
+                                      ? "Video"
+                                      : "Image",
+                                  data: m,
+                                },
+                              ]);
+                              // Auto scroll flow or show animation
+                            }}
+                            className="mt-2 text-xs bg-[#3E9B4F] text-white py-1.5 rounded hover:bg-[#4fb85f] font-medium transition-colors shadow-lg"
+                          >
+                            Add to flow
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

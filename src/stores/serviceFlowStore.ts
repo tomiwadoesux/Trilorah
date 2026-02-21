@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { ServiceItem, Song, Theme, Presentation, VerseData } from "../types";
+import type {
+  ServiceItem,
+  Song,
+  Theme,
+  Presentation,
+  VerseData,
+} from "../types";
 import { useAppStore } from "./appStore";
 import { useSongStore } from "./songStore";
 import { usePresentationStore } from "./presentationStore";
@@ -9,11 +15,16 @@ interface ServiceFlowState {
   draggedItem: ServiceItem | null;
   selectedItems: Set<string>;
   lastSelectedId: string | null;
+  expandedItems: Set<string>;
 
   // Actions
-  setServiceFlow: (flow: ServiceItem[] | ((prev: ServiceItem[]) => ServiceItem[])) => void;
+  setServiceFlow: (
+    flow: ServiceItem[] | ((prev: ServiceItem[]) => ServiceItem[]),
+  ) => void;
   setDraggedItem: (item: ServiceItem | null) => void;
-  setSelectedItems: (items: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  setSelectedItems: (
+    items: Set<string> | ((prev: Set<string>) => Set<string>),
+  ) => void;
   setLastSelectedId: (id: string | null) => void;
   addToFlow: (items: ServiceItem[]) => void;
   removeFromFlow: (id: string) => void;
@@ -21,10 +32,15 @@ interface ServiceFlowState {
   handleMultiSelectClick: (
     id: string,
     allIds: string[],
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => boolean;
   playFlowItem: (item: ServiceItem) => void;
   updateNoteInFlow: (id: string, newText: string) => void;
+  moveItemUp: (id: string) => void;
+  moveItemDown: (id: string) => void;
+  duplicateItem: (id: string) => void;
+  toggleItemExpanded: (id: string) => void;
+  setAllExpanded: (expanded: boolean) => void;
 }
 
 export const useServiceFlowStore = create<ServiceFlowState>((set, get) => ({
@@ -32,6 +48,7 @@ export const useServiceFlowStore = create<ServiceFlowState>((set, get) => ({
   draggedItem: null,
   selectedItems: new Set(),
   lastSelectedId: null,
+  expandedItems: new Set(),
 
   setServiceFlow: (flowOrFn) =>
     set((state) => ({
@@ -135,7 +152,63 @@ export const useServiceFlowStore = create<ServiceFlowState>((set, get) => ({
       serviceFlow: state.serviceFlow.map((i) =>
         i.id === id
           ? { ...i, subtitle: newText, data: { ...i.data, text: newText } }
-          : i
+          : i,
       ),
     })),
+
+  moveItemUp: (id) =>
+    set((state) => {
+      const index = state.serviceFlow.findIndex((i) => i.id === id);
+      if (index <= 0) return state;
+      const newFlow = [...state.serviceFlow];
+      const temp = newFlow[index - 1];
+      newFlow[index - 1] = newFlow[index];
+      newFlow[index] = temp;
+      return { serviceFlow: newFlow };
+    }),
+
+  moveItemDown: (id) =>
+    set((state) => {
+      const index = state.serviceFlow.findIndex((i) => i.id === id);
+      if (index === -1 || index === state.serviceFlow.length - 1) return state;
+      const newFlow = [...state.serviceFlow];
+      const temp = newFlow[index + 1];
+      newFlow[index + 1] = newFlow[index];
+      newFlow[index] = temp;
+      return { serviceFlow: newFlow };
+    }),
+
+  duplicateItem: (id) =>
+    set((state) => {
+      const index = state.serviceFlow.findIndex((i) => i.id === id);
+      if (index === -1) return state;
+      const original = state.serviceFlow[index];
+      const duplicate: ServiceItem = {
+        ...original,
+        id: crypto.randomUUID(),
+        title: `${original.title} (Copy)`,
+      };
+      const newFlow = [...state.serviceFlow];
+      newFlow.splice(index + 1, 0, duplicate);
+      return { serviceFlow: newFlow };
+    }),
+
+  toggleItemExpanded: (id) =>
+    set((state) => {
+      const newExpanded = new Set(state.expandedItems);
+      if (newExpanded.has(id)) {
+        newExpanded.delete(id);
+      } else {
+        newExpanded.add(id);
+      }
+      return { expandedItems: newExpanded };
+    }),
+
+  setAllExpanded: (expanded) =>
+    set((state) => {
+      if (!expanded) return { expandedItems: new Set() };
+      return {
+        expandedItems: new Set(state.serviceFlow.map((i) => i.id)),
+      };
+    }),
 }));

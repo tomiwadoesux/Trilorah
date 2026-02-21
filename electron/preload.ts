@@ -73,6 +73,13 @@ contextBridge.exposeInMainWorld("api", {
     pptxBase64: string;
   }) => ipcRenderer.invoke("import-generated-presentation", payload),
 
+  // Presentation persistence & cleanup
+  deletePresentation: (payload: { slides: string[]; sourcePptx?: string }) =>
+    ipcRenderer.invoke("delete-presentation", payload),
+  savePresentations: (presentations: any[]) =>
+    ipcRenderer.invoke("save-presentations", presentations),
+  loadPresentations: () => ipcRenderer.invoke("load-presentations"),
+
   // Output Windows
   openOutput: (outputId: string) => ipcRenderer.send("open-output", outputId),
 

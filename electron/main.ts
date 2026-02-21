@@ -615,6 +615,78 @@ ipcMain.handle(
   },
 );
 
+// Delete presentation files from disk
+ipcMain.handle(
+  "delete-presentation",
+  async (_event, { slides, sourcePptx }: { slides: string[]; sourcePptx?: string }) => {
+    try {
+      const presentationsDir = path.join(app.getPath("userData"), "presentations");
+
+      // Delete each slide image
+      for (const slide of slides) {
+        try {
+          if (fs.existsSync(slide)) fs.unlinkSync(slide);
+        } catch (e) {
+          console.warn("Could not delete slide:", slide, e);
+        }
+      }
+
+      // Remove the parent directory (the <name>-<timestamp>/ folder)
+      if (slides.length > 0) {
+        const slideDir = path.dirname(slides[0]);
+        try {
+          if (fs.existsSync(slideDir) && slideDir.startsWith(presentationsDir)) {
+            fs.rmSync(slideDir, { recursive: true, force: true });
+          }
+        } catch (e) {
+          console.warn("Could not remove slide directory:", slideDir, e);
+        }
+      }
+
+      // Delete the source PPTX if it lives inside our presentations directory
+      if (sourcePptx && sourcePptx.startsWith(presentationsDir)) {
+        try {
+          if (fs.existsSync(sourcePptx)) fs.unlinkSync(sourcePptx);
+        } catch (e) {
+          console.warn("Could not delete source PPTX:", sourcePptx, e);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("❌ delete-presentation error:", error);
+      return { success: false, error: msg };
+    }
+  },
+);
+
+// Save presentations list to disk for persistence
+ipcMain.handle("save-presentations", async (_event, presentations: any[]) => {
+  try {
+    const filePath = path.join(app.getPath("userData"), "presentations.json");
+    fs.writeFileSync(filePath, JSON.stringify(presentations, null, 2), "utf-8");
+    return { success: true };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("❌ save-presentations error:", error);
+    return { success: false, error: msg };
+  }
+});
+
+// Load presentations list from disk
+ipcMain.handle("load-presentations", async () => {
+  try {
+    const filePath = path.join(app.getPath("userData"), "presentations.json");
+    if (!fs.existsSync(filePath)) return [];
+    const data = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("❌ load-presentations error:", error);
+    return [];
+  }
+});
+
 ipcMain.handle("read-image-data-url", (_event, imagePath: string) => {
   if (!imagePath || typeof imagePath !== "string") return null;
 

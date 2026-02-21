@@ -17,10 +17,16 @@ import {
   calculateCoverageRatio,
   shouldCatchUp,
 } from "./utils/lyricMatcher";
+import { usePresentationStore } from "./stores/presentationStore";
 import { useWebMidi } from "./hooks/useWebMidi";
 
 export default function App() {
   useWebMidi();
+
+  // Load persisted presentations on startup
+  useEffect(() => {
+    usePresentationStore.getState().loadPresentations();
+  }, []);
 
   const {
     activeTab,

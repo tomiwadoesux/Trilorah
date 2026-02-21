@@ -32,7 +32,7 @@ export default function Toolbar() {
             onClick={() => setActiveTool(tool.id)}
             className={`p-2 rounded-lg flex items-center justify-center transition-colors ${
               activeTool === tool.id
-                ? "bg-[#3E9B4F] text-white"
+                ? "bg-[#3E9B4F]/15 border border-[#3E9B4F]/40 text-[#3E9B4F]"
                 : "text-gray-400 hover:text-white hover:bg-white/10"
             }`}
             title={tool.label}

@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { DisplayVerse, Theme, LayoutPreset, TextStyle } from "../types";
-import { DEFAULT_THEMES, LAYOUT_PRESETS, TEXT_STYLES } from "../utils/constants";
+import {
+  DEFAULT_THEMES,
+  LAYOUT_PRESETS,
+  TEXT_STYLES,
+} from "../utils/constants";
 
 export type ActiveTab =
   | "scriptures"
@@ -11,7 +15,7 @@ export type ActiveTab =
   | "video";
 
 interface AppState {
-  mode: "worship" | "sermon";
+  mode: "worship" | "sermon" | "media";
   activeTab: ActiveTab;
   liveVerse: DisplayVerse;
   previewVerse: DisplayVerse;
@@ -27,7 +31,7 @@ interface AppState {
   elapsedTime: number;
 
   // Actions
-  setMode: (mode: "worship" | "sermon") => void;
+  setMode: (mode: "worship" | "sermon" | "media") => void;
   setActiveTab: (tab: ActiveTab) => void;
   setLiveVerse: (verse: DisplayVerse) => void;
   setPreviewVerse: (verse: DisplayVerse) => void;

@@ -65,6 +65,14 @@ interface Window {
       data?: { title: string; slides: string[]; pptxPath?: string };
       error?: string;
     }>;
+    deletePresentation: (payload: {
+      slides: string[];
+      sourcePptx?: string;
+    }) => Promise<{ success: boolean; error?: string }>;
+    savePresentations: (
+      presentations: any[],
+    ) => Promise<{ success: boolean; error?: string }>;
+    loadPresentations: () => Promise<any[]>;
     readImageDataUrl: (imagePath: string) => Promise<string | null>;
     openOutput: (outputId: string) => void;
     onExternalCommand: (callback: (data: any) => void) => () => void;
