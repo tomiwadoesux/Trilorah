@@ -3,7 +3,9 @@ import { Upload, Loader2, ImageIcon, Trash2, Sparkles, X } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { usePresentationStore } from "../../stores/presentationStore";
 import { useServiceFlowStore } from "../../stores/serviceFlowStore";
+import { useNotificationStore } from "../../stores/notificationStore";
 import type { ServiceItem } from "../../types";
+import LocalSlideImage from "../ui/LocalSlideImage";
 
 interface QuickSlidesFormState {
   slideCount: number;
@@ -209,6 +211,7 @@ export default function PresentationsTab() {
   const { setPreviewVerse } = useAppStore();
   const [isQuickSlidesOpen, setIsQuickSlidesOpen] = useState(false);
   const [isGeneratingQuickSlides, setIsGeneratingQuickSlides] = useState(false);
+  const [isImportingPptx, setIsImportingPptx] = useState(false);
   const [quickSlidesError, setQuickSlidesError] = useState("");
   const [quickSlidesForm, setQuickSlidesForm] =
     useState<QuickSlidesFormState>(QUICK_SLIDES_DEFAULTS);
@@ -218,13 +221,20 @@ export default function PresentationsTab() {
     selectedPresentation,
     selectedPresentationSlide,
     isImportingPresentation,
+    setIsImportingPresentation,
     setSelectedPresentation,
     setSelectedPresentationSlide,
+    addPresentation,
     deletePresentation,
-    importPresentation,
   } = usePresentationStore();
 
   const { selectedItems, handleMultiSelectClick } = useServiceFlowStore();
+  const pushNotification = useNotificationStore(
+    (state) => state.pushNotification,
+  );
+  const dismissNotification = useNotificationStore(
+    (state) => state.dismissNotification,
+  );
 
   const updateQuickSlidesField = <K extends keyof QuickSlidesFormState>(
     key: K,
@@ -263,7 +273,15 @@ export default function PresentationsTab() {
       return;
     }
 
+    setIsQuickSlidesOpen(false);
     setIsGeneratingQuickSlides(true);
+    const generationNoticeId = pushNotification({
+      title: "Quick Slides",
+      message: "Generating PPTX presentation...",
+      status: "info",
+      durationMs: 0,
+    });
+
     try {
       const PptxGenJS = await loadPptxGenCtor();
       const pptx = new PptxGenJS();
@@ -395,7 +413,12 @@ export default function PresentationsTab() {
       });
 
       if (!result.success || !result.data) {
-        setQuickSlidesError(result.error || "Failed to import Quick Slides.");
+        dismissNotification(generationNoticeId);
+        pushNotification({
+          title: "Quick Slides Failed",
+          message: result.error || "Failed to import generated presentation.",
+          status: "error",
+        });
         return;
       }
 
@@ -403,21 +426,95 @@ export default function PresentationsTab() {
         id: `pres-${Date.now()}`,
         title: result.data.title,
         slides: result.data.slides,
+        sourcePptx: result.data.pptxPath,
       });
 
-      setIsQuickSlidesOpen(false);
+      dismissNotification(generationNoticeId);
+      pushNotification({
+        title: "Quick Slides Ready",
+        message: `${result.data.title} added to Presentations.`,
+        status: "success",
+      });
       setQuickSlidesForm(QUICK_SLIDES_DEFAULTS);
     } catch (error) {
       console.error(error);
       const details = getErrorMessage(error);
-      setQuickSlidesError(`Quick slide generation failed: ${details}`);
+      dismissNotification(generationNoticeId);
+      if (
+        details.includes(
+          "No handler registered for 'import-generated-presentation'",
+        )
+      ) {
+        pushNotification({
+          title: "Quick Slides Failed",
+          message:
+            "Backend is out of date. Restart Electron (or run `npm run dev`) and try again.",
+          status: "error",
+        });
+      } else {
+        pushNotification({
+          title: "Quick Slides Failed",
+          message: details,
+          status: "error",
+        });
+      }
     } finally {
       setIsGeneratingQuickSlides(false);
     }
   };
 
+  const handleImportPresentation = async () => {
+    setIsImportingPptx(true);
+    setIsImportingPresentation(true);
+    const importNoticeId = pushNotification({
+      title: "Importing PPTX",
+      message: "Converting presentation to slides...",
+      status: "info",
+      durationMs: 0,
+    });
+
+    try {
+      const result = await window.api.importPresentation();
+      dismissNotification(importNoticeId);
+
+      if (!result.success || !result.data) {
+        if (result.error && result.error !== "Cancelled") {
+          pushNotification({
+            title: "Import Failed",
+            message: result.error,
+            status: "error",
+          });
+        }
+        return;
+      }
+
+      addPresentation({
+        id: `pres-${Date.now()}`,
+        title: result.data.title,
+        slides: result.data.slides,
+        sourcePptx: result.data.pptxPath,
+      });
+
+      pushNotification({
+        title: "Import Complete",
+        message: `${result.data.title} added to Presentations.`,
+        status: "success",
+      });
+    } catch (error) {
+      dismissNotification(importNoticeId);
+      pushNotification({
+        title: "Import Failed",
+        message: getErrorMessage(error),
+        status: "error",
+      });
+    } finally {
+      setIsImportingPptx(false);
+      setIsImportingPresentation(false);
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-[#0a0a0a]">
+    <div className="flex-1 min-h-0 overflow-hidden flex flex-col bg-[#0a0a0a]">
       {/* Presentations Header */}
       <div className="min-h-14 bg-[#151515] border-b border-white/10 flex items-center px-4 gap-3 relative py-2">
         <span className="text-sm font-medium text-white">Presentations</span>
@@ -438,11 +535,11 @@ export default function PresentationsTab() {
           Quick Slides
         </button>
         <button
-          onClick={importPresentation}
-          disabled={isImportingPresentation}
+          onClick={handleImportPresentation}
+          disabled={isImportingPresentation || isImportingPptx}
           className="flex items-center gap-2 px-4 py-2 bg-[#3E9B4F] hover:bg-[#4fb85f] disabled:bg-gray-700 rounded-lg text-sm font-medium text-white transition-colors"
         >
-          {isImportingPresentation ? (
+          {isImportingPresentation || isImportingPptx ? (
             <Loader2 className="animate-spin" size={16} />
           ) : (
             <Upload size={16} />
@@ -452,9 +549,9 @@ export default function PresentationsTab() {
       </div>
 
       {/* Presentation List + Slides View */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden flex">
         {/* Presentation List */}
-        <div className="w-64 border-r border-white/10 overflow-y-auto">
+        <div className="w-64 min-h-0 border-r border-white/10 overflow-y-auto">
           {presentations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-4">
               <ImageIcon className="text-gray-600 mb-3" size={32} />
@@ -510,6 +607,12 @@ export default function PresentationsTab() {
                     if (shouldPlay) {
                       setSelectedPresentation(pres);
                       setSelectedPresentationSlide(0);
+                      if (pres.slides.length > 0) {
+                        setPreviewVerse({
+                          ref: `${pres.title} - Slide 1`,
+                          text: `[SLIDE:${pres.slides[0]}]`,
+                        });
+                      }
                     }
                   }}
                   className={`flex-1 p-3 text-left ${
@@ -539,44 +642,53 @@ export default function PresentationsTab() {
         </div>
 
         {/* Slides Grid */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {selectedPresentation ? (
-            <div className="grid grid-cols-3 gap-3">
-              {selectedPresentation.slides.map((slide, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    setSelectedPresentationSlide(index);
-                    setPreviewVerse({
-                      ref: `${selectedPresentation.title} - Slide ${index + 1}`,
-                      text: `[SLIDE:${slide}]`,
-                    });
-                  }}
-                  className={`aspect-video rounded-lg border-2 overflow-hidden relative ${
-                    selectedPresentationSlide === index
-                      ? "border-[#3E9B4F] ring-2 ring-[#3E9B4F]/50"
-                      : "border-white/10 hover:border-white/30"
-                  }`}
-                >
-                  <img
-                    src={`file://${slide}`}
-                    alt={`Slide ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-1 left-1 text-[10px] text-white bg-black/60 px-1 rounded">
-                    {index + 1}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <ImageIcon className="text-gray-600 mb-3" size={40} />
-              <p className="text-sm text-gray-500">
-                Select a presentation to view slides
-              </p>
-            </div>
-          )}
+        <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto pr-1"
+            onWheel={(e) => {
+              const el = e.currentTarget;
+              el.scrollTop += e.deltaY;
+            }}
+          >
+            {selectedPresentation ? (
+              <div className="grid grid-cols-3 gap-3 pb-4">
+                {selectedPresentation.slides.map((slide, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSelectedPresentationSlide(index);
+                      setPreviewVerse({
+                        ref: `${selectedPresentation.title} - Slide ${index + 1}`,
+                        text: `[SLIDE:${slide}]`,
+                      });
+                    }}
+                    className={`aspect-video rounded-lg border-2 overflow-hidden relative ${
+                      selectedPresentationSlide === index
+                        ? "border-[#3E9B4F] ring-2 ring-[#3E9B4F]/50"
+                        : "border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    <LocalSlideImage
+                      path={slide}
+                      alt={`Slide ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      mode="data"
+                    />
+                    <div className="absolute bottom-1 left-1 text-[10px] text-white bg-black/60 px-1 rounded">
+                      {index + 1}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <ImageIcon className="text-gray-600 mb-3" size={40} />
+                <p className="text-sm text-gray-500">
+                  Select a presentation to view slides
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

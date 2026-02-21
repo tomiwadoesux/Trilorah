@@ -54,7 +54,7 @@ interface Window {
     pushToLive: () => void;
     importPresentation: () => Promise<{
       success: boolean;
-      data?: { title: string; slides: string[] };
+      data?: { title: string; slides: string[]; pptxPath?: string };
       error?: string;
     }>;
     importGeneratedPresentation: (payload: {
@@ -62,9 +62,10 @@ interface Window {
       pptxBase64: string;
     }) => Promise<{
       success: boolean;
-      data?: { title: string; slides: string[] };
+      data?: { title: string; slides: string[]; pptxPath?: string };
       error?: string;
     }>;
+    readImageDataUrl: (imagePath: string) => Promise<string | null>;
     openOutput: (outputId: string) => void;
     onExternalCommand: (callback: (data: any) => void) => () => void;
   };

@@ -54,6 +54,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
           id: `pres-${Date.now()}`,
           title: result.data.title,
           slides: result.data.slides,
+          sourcePptx: result.data.pptxPath,
         };
         get().addPresentation(newPres);
       }

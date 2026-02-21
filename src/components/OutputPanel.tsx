@@ -1,4 +1,6 @@
 import type { DisplayVerse, Theme, TextStyle, LayoutPreset } from "../types";
+import { parseSlideToken } from "../utils/slideToken";
+import LocalSlideImage from "./ui/LocalSlideImage";
 
 interface OutputPanelProps {
   verse: DisplayVerse;
@@ -33,6 +35,19 @@ export default function OutputPanel({
   const maxWidth = isLive ? "max-w-4xl" : "max-w-2xl";
   const mbSize = isLive ? "mb-6" : "mb-4";
   const mlSize = isLive ? "ml-3" : "ml-2";
+  const slidePath = parseSlideToken(verse.text);
+
+  if (showText && slidePath) {
+    return (
+      <div className="absolute inset-0 bg-black">
+        <LocalSlideImage
+          path={slidePath}
+          alt={verse.ref || "Presentation slide"}
+          className="absolute inset-0 w-full h-full object-contain"
+        />
+      </div>
+    );
+  }
 
   return (
     <>

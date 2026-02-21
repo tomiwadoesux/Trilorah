@@ -8,6 +8,7 @@ import { useAsrStore } from "./stores/asrStore";
 import { useSongStore } from "./stores/songStore";
 import { useWhisperTranscription } from "./useWhisperTranscription";
 import { BOOK_NAMES } from "./utils/constants";
+import NotificationTray from "./components/ui/NotificationTray";
 import {
   normalizeLyrics,
   getSlideWordSet,
@@ -532,6 +533,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden">
+      <NotificationTray />
       <Sidebar
         startWhisperRecording={startWhisperRecording}
         stopWhisperRecording={stopWhisperRecording}

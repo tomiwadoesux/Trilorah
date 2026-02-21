@@ -7,7 +7,7 @@
  * - IPC: Emits verse-detected to frontend
  * - Database: better-sqlite3 for verse text lookup
  */
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, protocol } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import Database from "better-sqlite3";
@@ -20,6 +20,19 @@ if (!process.versions.electron) {
   );
   process.exit(1);
 }
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "local-media",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 // Load environment variables
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
@@ -42,6 +55,15 @@ import {
   startWebSocketServer,
   stopWebSocketServer,
 } from "./api/websocketServer";
+
+function getMimeType(filePath: string): string {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".png") return "image/png";
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".gif") return "image/gif";
+  return "application/octet-stream";
+}
 
 // --- DATABASE SETUP ---
 const isDev = process.env.NODE_ENV === "development";
@@ -506,6 +528,13 @@ ipcMain.handle("import-presentation", async () => {
   try {
     console.log(`📊 Converting presentation: ${filePath}`);
     const slides = await convertPptxToImages(filePath, outputDir);
+    if (slides.length === 0) {
+      return {
+        success: false,
+        error:
+          "No slide images were produced from this PPTX. Check LibreOffice and the file format.",
+      };
+    }
     console.log(`✅ Converted ${slides.length} slides`);
 
     return {
@@ -513,13 +542,16 @@ ipcMain.handle("import-presentation", async () => {
       data: {
         title: fileName,
         slides,
+        pptxPath: filePath,
       },
     };
   } catch (error) {
     console.error("❌ Presentation conversion error:", error);
+    const details =
+      error instanceof Error ? error.message : "Unknown conversion error";
     return {
       success: false,
-      error: "Conversion failed. Is LibreOffice installed?",
+      error: `Conversion failed: ${details}`,
     };
   }
 });
@@ -554,6 +586,13 @@ ipcMain.handle(
 
       console.log(`📊 Converting generated presentation: ${pptxPath}`);
       const slides = await convertPptxToImages(pptxPath, outputDir);
+      if (slides.length === 0) {
+        return {
+          success: false,
+          error:
+            "Generated PPTX produced no slide images. Check LibreOffice setup.",
+        };
+      }
       console.log(`✅ Converted ${slides.length} generated slides`);
 
       return {
@@ -561,20 +600,70 @@ ipcMain.handle(
         data: {
           title: normalizedTitle,
           slides,
+          pptxPath,
         },
       };
     } catch (error) {
       console.error("❌ Generated presentation conversion error:", error);
+      const details =
+        error instanceof Error ? error.message : "Unknown conversion error";
       return {
         success: false,
-        error: "Quick slide generation failed. Is LibreOffice installed?",
+        error: `Quick slide generation failed: ${details}`,
       };
     }
   },
 );
 
+ipcMain.handle("read-image-data-url", (_event, imagePath: string) => {
+  if (!imagePath || typeof imagePath !== "string") return null;
+
+  try {
+    const normalizedPath = imagePath.startsWith("file://")
+      ? decodeURI(imagePath.replace(/^file:\/+/, "/"))
+      : imagePath;
+
+    if (!fs.existsSync(normalizedPath)) return null;
+
+    const mimeType = getMimeType(normalizedPath);
+    const bytes = fs.readFileSync(normalizedPath);
+    return `data:${mimeType};base64,${bytes.toString("base64")}`;
+  } catch (error) {
+    console.error("❌ read-image-data-url error:", error);
+    return null;
+  }
+});
+
 // --- APP LIFECYCLE ---
 app.whenReady().then(() => {
+  protocol.handle("local-media", async (request) => {
+    try {
+      const requestUrl = new URL(request.url);
+      const requestedPath = decodeURIComponent(requestUrl.pathname);
+      const filePath =
+        process.platform === "win32" && /^\/[a-zA-Z]:\//.test(requestedPath)
+          ? requestedPath.slice(1)
+          : requestedPath;
+
+      if (!filePath || !fs.existsSync(filePath)) {
+        return new Response("Not found", { status: 404 });
+      }
+
+      const mimeType = getMimeType(filePath);
+      const buffer = fs.readFileSync(filePath);
+      return new Response(buffer, {
+        status: 200,
+        headers: {
+          "content-type": mimeType,
+          "cache-control": "public, max-age=31536000",
+        },
+      });
+    } catch (error) {
+      console.error("❌ local-media protocol error:", error);
+      return new Response("Bad request", { status: 400 });
+    }
+  });
+
   // Initialize database
   const dbPath = findDatabase();
   if (dbPath) {

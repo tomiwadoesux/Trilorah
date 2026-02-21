@@ -17,6 +17,7 @@ import { useScriptureStore } from "../../stores/scriptureStore";
 import { useSongStore } from "../../stores/songStore";
 import { useServiceFlowStore } from "../../stores/serviceFlowStore";
 import type { ServiceItem } from "../../types";
+import LocalSlideImage from "../ui/LocalSlideImage";
 
 interface SidebarProps {
   isWhisperReady: boolean;
@@ -282,7 +283,11 @@ export default function Sidebar({
                     ) : item.data.type === "video" ? (
                       <video src={item.data.url} className="w-full h-full object-cover" muted />
                     ) : item.type === "presentation" && item.data.slides?.[0] ? (
-                      <img src={item.data.slides[0]} className="w-full h-full object-cover" alt="" />
+                      <LocalSlideImage
+                        path={item.data.slides[0]}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <img src={item.data.url} className="w-full h-full object-cover" alt="" />
                     )}

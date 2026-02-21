@@ -118,6 +118,15 @@ export const useServiceFlowStore = create<ServiceFlowState>((set, get) => ({
       presStore.setSelectedPresentation(pres);
       appStore.setActiveTab("presentations");
       presStore.setSelectedPresentationSlide(0);
+      if (pres.slides.length > 0) {
+        const firstSlide = {
+          ref: `${pres.title} - Slide 1`,
+          text: `[SLIDE:${pres.slides[0]}]`,
+        };
+        appStore.setPreviewVerse(firstSlide);
+        appStore.setLiveVerse(firstSlide);
+        appStore.setShowLiveText(true);
+      }
     }
   },
 

@@ -76,6 +76,10 @@ contextBridge.exposeInMainWorld("api", {
   // Output Windows
   openOutput: (outputId: string) => ipcRenderer.send("open-output", outputId),
 
+  // Local image helper
+  readImageDataUrl: (imagePath: string) =>
+    ipcRenderer.invoke("read-image-data-url", imagePath),
+
   // Webhooks / External API listener
   onExternalCommand: (callback: (data: any) => void) => {
     const subscription = (_event: any, data: any) => callback(data);

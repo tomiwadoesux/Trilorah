@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "./stores/appStore";
+import { parseSlideToken } from "./utils/slideToken";
+import LocalSlideImage from "./components/ui/LocalSlideImage";
 
 export default function OutputApp() {
   const [outputId, setOutputId] = useState<string>("main");
@@ -37,6 +39,19 @@ export default function OutputApp() {
 
   // Alpha / transparent background for OBS if needed
   const isAlpha = outputId === "alternate";
+  const slidePath = parseSlideToken(liveVerse.text || "");
+
+  if (slidePath) {
+    return (
+      <div className="w-screen h-screen bg-black">
+        <LocalSlideImage
+          path={slidePath}
+          alt={liveVerse.ref || "Presentation slide"}
+          className="w-full h-full object-contain"
+        />
+      </div>
+    );
+  }
 
   return (
     <div

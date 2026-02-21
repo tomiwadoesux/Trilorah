@@ -11,6 +11,7 @@ export interface Presentation {
   id: string;
   title: string;
   slides: string[]; // Image paths
+  sourcePptx?: string; // Original/Generated PPTX path
 }
 
 // Service Flow Item
