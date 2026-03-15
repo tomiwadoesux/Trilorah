@@ -48,7 +48,7 @@ interface Window {
     onVersePreview: (callback: (data: VerseDetection) => void) => () => void;
     onVerseDetected: (callback: (data: VerseDetection) => void) => () => void;
     onAudioLevel: (callback: (level: number) => void) => () => void;
-    startListening: () => void;
+    startListening: (deviceLabel?: string) => void;
     stopListening: () => void;
     sendText: (text: string) => void;
     pushToLive: () => void;

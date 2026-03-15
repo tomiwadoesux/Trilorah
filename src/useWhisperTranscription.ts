@@ -4,6 +4,7 @@ interface UseWhisperOptions {
   onTranscript: (text: string) => void;
   onStatusChange?: (status: string) => void;
   deviceId?: string;
+  deviceLabel?: string;
 }
 
 /**
@@ -15,6 +16,7 @@ export function useWhisperTranscription({
   onTranscript,
   onStatusChange,
   deviceId = "default",
+  deviceLabel,
 }: UseWhisperOptions) {
   const [isRecording, setIsRecording] = useState(false);
   // Whisper runs in main process, so we're always "ready" on the frontend
@@ -75,7 +77,7 @@ export function useWhisperTranscription({
       updateStatus("Listening...");
 
       // Notify main process to start listening (if needed)
-      window.api?.startListening?.();
+      window.api?.startListening?.(deviceLabel);
 
       console.log(
         "✅ Audio monitoring started - Whisper is running in main process"
@@ -84,7 +86,7 @@ export function useWhisperTranscription({
       console.error("❌ Failed to start audio:", error);
       updateStatus(`Error: ${error}`);
     }
-  }, [deviceId, updateStatus]);
+  }, [deviceId, deviceLabel, updateStatus]);
 
   // Stop recording
   const stopRecording = useCallback(() => {

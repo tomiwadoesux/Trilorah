@@ -218,10 +218,10 @@ const session = new ScriptureSession((display: DisplayPayload) => {
 // --- ASR HANDLING ---
 let isListening = false;
 
-function startASR(): void {
+function startASR(deviceLabel?: string): void {
   if (isListening) return;
 
-  console.log("🎤 Starting Deepgram ASR...");
+  console.log("🎤 Starting Deepgram ASR...", deviceLabel ? `(device: ${deviceLabel})` : "(default device)");
   emitASRStatus("Connecting...");
 
   startDeepgram(
@@ -250,6 +250,7 @@ function startASR(): void {
       console.error("❌ Deepgram error:", error);
       emitASRStatus("Error: " + error.message);
     },
+    deviceLabel,
   );
 
   isListening = true;
@@ -300,6 +301,25 @@ function handleMLVerseDetection(data: any): void {
   });
 }
 
+// --- VERSE TEXT LOOKUP HELPER ---
+function lookupVerseText(book: string, chapter: number, verse: number): string {
+  const bookId = bookIdMap[book];
+  if (db && bookId !== undefined) {
+    try {
+      const row = db
+        .prepare(
+          `SELECT verse as text FROM bible
+           WHERE Book = ? AND Chapter = ? AND Versecount = ?`,
+        )
+        .get(bookId, chapter, verse) as { text: string } | undefined;
+      return row?.text || "";
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
 // --- HANDLE ASR TEXT (for commands like "next") ---
 function handleASRText(text: string): void {
   // Priority 1: Check if it's a command
@@ -310,21 +330,36 @@ function handleASRText(text: string): void {
   // Priority 2: Send to ML resolver for explicit refs
   sendTranscript(text, true);
 
-  // Priority 3: Check for quoted verses (lower priority)
+  // Priority 3: Check for quoted verses
   const quoteMatcher = getQuoteMatcher();
-  const quoteResult = quoteMatcher.tryDetectQuote();
-  if (quoteResult) {
-    console.log(`📜 Quote match: ${quoteResult.ref}`);
-    // Only use quote if ML didn't detect anything (wait a bit)
-    setTimeout(() => {
-      // Session will handle debouncing if ML already detected something
-      session.onReferenceDetected({
-        book: quoteResult.ref.split(" ").slice(0, -1).join(" "),
-        chapter: quoteResult.chapter,
-        verse: quoteResult.verse,
-        rangeEnd: null,
+  const quoteResults = quoteMatcher.tryDetectQuotes();
+  if (quoteResults.length > 0) {
+    const best = quoteResults[0];
+    const bestBook = best.ref.split(" ").slice(0, -1).join(" ");
+    console.log(
+      `📜 Quote match: ${best.ref} (+${quoteResults.length - 1} candidates)`,
+    );
+
+    // Best match → session → preview
+    session.onReferenceDetected({
+      book: bestBook,
+      chapter: best.chapter,
+      verse: best.verse,
+      rangeEnd: null,
+    });
+
+    // Additional candidates → pending queue (max 5 alternatives)
+    for (const alt of quoteResults.slice(1, 6)) {
+      const altBook = alt.ref.split(" ").slice(0, -1).join(" ");
+      const altText = lookupVerseText(altBook, alt.chapter, alt.verse);
+      emitVerseDetected({
+        book: altBook,
+        chapter: alt.chapter,
+        verse: alt.verse,
+        text: altText,
+        isPreview: false, // Goes to pending queue
       });
-    }, 200); // Small delay to let ML detection happen first
+    }
   }
 }
 
@@ -417,9 +452,9 @@ ipcMain.on("process-text", (_event, text: string) => {
 });
 
 // Start/stop ASR
-ipcMain.on("start-listening", () => {
-  console.log("▶️ Start listening requested");
-  startASR();
+ipcMain.on("start-listening", (_event, deviceLabel?: string) => {
+  console.log("▶️ Start listening requested", deviceLabel ? `(device: ${deviceLabel})` : "");
+  startASR(deviceLabel);
 });
 
 ipcMain.on("stop-listening", () => {

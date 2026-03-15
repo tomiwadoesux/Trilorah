@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld("api", {
     return () => ipcRenderer.removeListener("on-audio-level", subscription);
   },
   // Audio Control
-  startListening: () => ipcRenderer.send("start-listening"),
+  startListening: (deviceLabel?: string) => ipcRenderer.send("start-listening", deviceLabel),
   stopListening: () => ipcRenderer.send("stop-listening"),
 
   // Send transcription text to the brain for processing

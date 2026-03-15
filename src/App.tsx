@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TabDeck } from "./components/layout/TabDeck";
 import MonitorBar from "./components/monitors/MonitorBar";
@@ -45,19 +45,26 @@ export default function App() {
     setCurrentBook,
     setCurrentChapter,
     setSelectedDeckId,
-    addToHistory,
     chapterVerses,
   } = useScriptureStore();
 
   const {
     selectedDeviceId,
     isListening,
+    availableDevices,
     setAvailableDevices,
     setAudioLevel,
     setCurrentTranscript,
     setDetectedReference,
     setWhisperStatus,
   } = useAsrStore();
+
+  // Resolve the device label from the selected device ID
+  const selectedDeviceLabel = useMemo(() => {
+    if (selectedDeviceId === "default") return undefined;
+    const device = availableDevices.find((d) => d.deviceId === selectedDeviceId);
+    return device?.label || undefined;
+  }, [selectedDeviceId, availableDevices]);
 
   const {
     selectedSong,
@@ -176,7 +183,7 @@ export default function App() {
   }, [selectedDeckId, chapterVerses, setPreviewVerse]);
 
   // Function: Detect verse from transcript
-  const detectVerseFromTranscript = (text: string) => {
+  const detectVerseFromTranscript = async (text: string) => {
     const VERSE_REGEX =
       /(Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts?|Romans|Corinthians|Galatians|Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|Philemon|Hebrews|James|Peter|Jude|Revelation)\s*(?:chapter\s*)?(\d+)(?:\s*(?:verse|:|\s)\s*(\d+))?/i;
     const match = text.match(VERSE_REGEX);
@@ -195,7 +202,27 @@ export default function App() {
         setCurrentBook(parseInt(bookId));
         setCurrentChapter(chapter);
         setSelectedDeckId(verse);
-        addToHistory(ref, "Detected");
+
+        // Fetch verse text and add to pending schedule
+        let verseText = "";
+        try {
+          const result = await window.api.getChapter(
+            parseInt(bookId),
+            chapter,
+          );
+          const verseData = result?.data?.find((v: any) => v.id === verse);
+          verseText = verseData?.text || "";
+        } catch {}
+
+        useScriptureStore.getState().addPendingVerse({
+          ref,
+          snippet:
+            verseText.length > 80
+              ? verseText.slice(0, 80) + "..."
+              : verseText,
+          text: verseText,
+        });
+
         setTimeout(() => setDetectedReference(null), 3000);
       }
     }
@@ -307,9 +334,10 @@ export default function App() {
     onTranscript: handleWhisperTranscript,
     onStatusChange: setWhisperStatus,
     deviceId: selectedDeviceId,
+    deviceLabel: selectedDeviceLabel,
   });
 
-  // Effect: Listen for AI Verse Detections
+  // Effect: Listen for AI Verse Detections — adds to pending schedule
   useEffect(() => {
     if (!window.api?.onVerseDetected) return;
     const cleanup = window.api.onVerseDetected((data: any) => {
@@ -327,14 +355,18 @@ export default function App() {
         activeTab !== "songs" &&
         activeTab !== "presentations"
       ) {
-        setLiveVerse({ ref, text });
-        addToHistory(ref, text.slice(0, 50) + (text.length > 50 ? "..." : ""));
+        useScriptureStore.getState().addPendingVerse({
+          ref,
+          snippet:
+            text.length > 80 ? text.slice(0, 80) + "..." : text,
+          text,
+        });
       }
     });
     return cleanup;
-  }, [activeTab, listeningMode, setLiveVerse, addToHistory]);
+  }, [activeTab, listeningMode]);
 
-  // Effect: Listen for AI Verse PREVIEW
+  // Effect: Listen for AI Verse PREVIEW — adds to pending schedule
   useEffect(() => {
     if (!window.api?.onVersePreview) return;
     const cleanup = window.api.onVersePreview((data: any) => {
@@ -346,19 +378,18 @@ export default function App() {
           : `${data.book} ${data.chapter}:${data.verse}`;
 
       const text =
-        data.verses?.map((v: any) => v.text).join(" ") ||
-        data.text ||
-        "Loading...";
-      let progress = undefined;
+        data.verses?.map((v: any) => v.text).join(" ") || data.text || "";
 
-      if (data.rangeEnd) {
-        const currentEnd = data.endVerse || data.verse;
-        progress = `v${data.verse}–${currentEnd} of ${data.rangeEnd}`;
-      }
-
+      // Add to pending queue (progress bar + "Send to Live" button)
       if (activeTab !== "songs" && activeTab !== "presentations") {
-        setPreviewVerse({ ref, text, progress });
+        useScriptureStore.getState().addPendingVerse({
+          ref,
+          snippet:
+            text.length > 80 ? text.slice(0, 80) + "..." : text,
+          text,
+        });
       }
+
       setDetectedReference(ref);
 
       const bookId = Object.entries(BOOK_NAMES).find(
@@ -370,13 +401,13 @@ export default function App() {
         setCurrentChapter(data.chapter);
         setSelectedDeckId(data.verse ?? 1);
       }
+
       setTimeout(() => setDetectedReference(null), 5000);
     });
     return cleanup;
   }, [
     activeTab,
     listeningMode,
-    setPreviewVerse,
     setDetectedReference,
     setCurrentBook,
     setCurrentChapter,
@@ -398,6 +429,11 @@ export default function App() {
       }
     };
     getDevices();
+    // Re-enumerate when devices change (e.g. AUX cable plugged in)
+    navigator.mediaDevices.addEventListener("devicechange", getDevices);
+    return () => {
+      navigator.mediaDevices.removeEventListener("devicechange", getDevices);
+    };
   }, [setAvailableDevices]);
 
   // Effect: Listen for Transcript Updates
@@ -518,7 +554,7 @@ export default function App() {
 
     if (isListening) {
       startRealMic();
-      window.api?.startListening();
+      window.api?.startListening(selectedDeviceLabel);
     } else {
       window.api?.stopListening();
       setAudioLevel(-60);
@@ -535,7 +571,7 @@ export default function App() {
       if (audioContext) (audioContext as AudioContext).close();
       if (recognition) recognition.stop();
     };
-  }, [isListening, selectedDeviceId, setAudioLevel, setCurrentTranscript]);
+  }, [isListening, selectedDeviceId, selectedDeviceLabel, setAudioLevel, setCurrentTranscript]);
 
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden">

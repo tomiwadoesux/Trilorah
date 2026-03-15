@@ -7,6 +7,7 @@ import { spawn, ChildProcess } from "child_process";
 
 let deepgramConnection: any = null;
 let micProcess: ChildProcess | null = null;
+let currentDeviceLabel: string | undefined;
 
 // macOS default sample rate is 48000, sox will use this
 const SAMPLE_RATE = 48000;
@@ -16,8 +17,10 @@ const SAMPLE_RATE = 48000;
  */
 export function startDeepgram(
   onText: (text: string, isFinal: boolean) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  deviceLabel?: string
 ): void {
+  currentDeviceLabel = deviceLabel;
   const apiKey = process.env.DEEPGRAM_API_KEY;
 
   if (!apiKey) {
@@ -37,7 +40,7 @@ export function startDeepgram(
     smart_format: true,
     interim_results: true,
     punctuate: true,
-    endpointing: 300,
+    endpointing: 3500,
     sample_rate: SAMPLE_RATE,
     encoding: "linear16",
     channels: 1,
@@ -76,6 +79,13 @@ function startMicrophoneCapture(): void {
 
   console.log(`🎙️ Starting microphone at ${SAMPLE_RATE}Hz...`);
 
+  // Build environment with AUDIODEV for device selection
+  const spawnEnv = { ...process.env };
+  if (currentDeviceLabel && currentDeviceLabel !== "default") {
+    spawnEnv.AUDIODEV = currentDeviceLabel;
+    console.log(`🎙️ AUDIODEV set to: "${currentDeviceLabel}"`);
+  }
+
   // Use sox/rec to capture audio on macOS
   // Let sox use the native sample rate (48000 on macOS)
   micProcess = spawn(
@@ -96,6 +106,7 @@ function startMicrophoneCapture(): void {
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
+      env: spawnEnv,
     }
   );
 
@@ -150,6 +161,7 @@ export function stopDeepgram(): void {
     deepgramConnection = null;
   }
 
+  currentDeviceLabel = undefined;
   console.log("🎤 Deepgram stopped");
 }
 

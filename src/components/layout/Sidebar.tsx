@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Mic,
   List,
@@ -25,6 +25,98 @@ import { useScriptureStore } from "../../stores/scriptureStore";
 import { useAsrStore } from "../../stores/asrStore";
 import type { ServiceItem } from "../../types";
 
+/* ── Pending Verse Schedule Card ─────────────────────────── */
+function PendingVerseCard({
+  verse,
+  isSingle,
+  onAutoComplete,
+  onSendToLive,
+  onDismiss,
+}: {
+  verse: {
+    id: string;
+    ref: string;
+    snippet: string;
+    text: string;
+    arrivedAt: number;
+  };
+  isSingle: boolean;
+  onAutoComplete: () => void;
+  onSendToLive: () => void;
+  onDismiss: () => void;
+}) {
+  const [progress, setProgress] = useState(0);
+  const onAutoCompleteRef = useRef(onAutoComplete);
+  onAutoCompleteRef.current = onAutoComplete;
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setProgress(0);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    if (isSingle) {
+      const duration = 4000;
+      const startTime = Date.now();
+      timerRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const pct = Math.min((elapsed / duration) * 100, 100);
+        setProgress(pct);
+        if (pct >= 100) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          onAutoCompleteRef.current();
+        }
+      }, 50);
+    } else {
+      const elapsed = Date.now() - verse.arrivedAt;
+      const remaining = Math.max(6000 - elapsed, 0);
+      timeoutRef.current = setTimeout(() => onDismissRef.current(), remaining);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [isSingle, verse.id]);
+
+  return (
+    <div className="p-3 rounded-lg bg-[#111] border border-[#3E9B4F]/20 transition-all">
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <span className="text-xs font-bold text-[#3E9B4F]">
+            {verse.ref}
+          </span>
+          {verse.snippet && (
+            <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1 italic">
+              &ldquo;{verse.snippet}&rdquo;
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onSendToLive}
+          className="shrink-0 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-[#3E9B4F]/20 text-[#3E9B4F] border border-[#3E9B4F]/30 rounded hover:bg-[#3E9B4F]/40 transition-colors"
+        >
+          Send to Live
+        </button>
+      </div>
+      {isSingle && (
+        <div className="mt-2 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+          <div
+            className="h-full bg-gradient-to-r from-[#3E9B4F] to-[#4fb85f] rounded-full"
+            style={{
+              width: `${progress}%`,
+              transition: "width 75ms linear",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SidebarProps {
   startWhisperRecording: () => void;
   stopWhisperRecording: () => void;
@@ -40,7 +132,14 @@ export function Sidebar({
   const [noteText, setNoteText] = useState("");
 
   const mediaInputRef = useRef<HTMLInputElement>(null);
-  const { mode, setMode, liveVerse } = useAppStore();
+  const {
+    mode,
+    setMode,
+    liveVerse,
+    setLiveVerse,
+    setPreviewVerse,
+    setShowLiveText,
+  } = useAppStore();
   const {
     serviceFlow,
     setServiceFlow,
@@ -55,7 +154,8 @@ export function Sidebar({
     toggleItemExpanded,
     setAllExpanded,
   } = useServiceFlowStore();
-  const { history } = useScriptureStore();
+  const { history, pendingVerses, removePendingVerse, addToHistory } =
+    useScriptureStore();
 
   const {
     isListening,
@@ -561,6 +661,31 @@ export function Sidebar({
           </div>
 
           <div className="p-2 space-y-1 flex-1">
+            {/* Pending verse schedule cards */}
+            {pendingVerses.map((pv) => (
+              <PendingVerseCard
+                key={pv.id}
+                verse={pv}
+                isSingle={pendingVerses.length === 1}
+                onAutoComplete={() => {
+                  // Progress bar expired — dismiss (user didn't act)
+                  removePendingVerse(pv.id);
+                }}
+                onSendToLive={() => {
+                  setLiveVerse({ ref: pv.ref, text: pv.text });
+                  setPreviewVerse({ ref: pv.ref, text: pv.text });
+                  setShowLiveText(true);
+                  removePendingVerse(pv.id);
+                  addToHistory(
+                    pv.ref,
+                    pv.snippet || pv.text.slice(0, 50),
+                  );
+                }}
+                onDismiss={() => removePendingVerse(pv.id)}
+              />
+            ))}
+
+            {/* Detection history */}
             {history.map((record, i) => (
               <div
                 key={i}
@@ -583,7 +708,8 @@ export function Sidebar({
                 </p>
               </div>
             ))}
-            {history.length === 0 && (
+
+            {pendingVerses.length === 0 && history.length === 0 && (
               <div className="text-center p-8 text-gray-600 text-xs">
                 Speak references to see them here
               </div>

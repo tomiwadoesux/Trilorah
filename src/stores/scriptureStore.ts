@@ -35,6 +35,22 @@ interface ScriptureState {
   handleSelectSuggestion: (value: string | number) => void;
   handleBackspace: () => void;
   clearSearch: () => void;
+
+  // Pending verse schedule
+  pendingVerses: {
+    id: string;
+    ref: string;
+    snippet: string;
+    text: string;
+    arrivedAt: number;
+  }[];
+  addPendingVerse: (verse: {
+    ref: string;
+    snippet: string;
+    text: string;
+  }) => void;
+  removePendingVerse: (id: string) => void;
+  clearPendingVerses: () => void;
 }
 
 export const useScriptureStore = create<ScriptureState>((set, get) => ({
@@ -165,4 +181,26 @@ export const useScriptureStore = create<ScriptureState>((set, get) => ({
       searchInput: "",
     });
   },
+
+  // Pending verse schedule
+  pendingVerses: [],
+  addPendingVerse: (verse) =>
+    set((state) => {
+      if (state.pendingVerses.some((v) => v.ref === verse.ref)) return state;
+      return {
+        pendingVerses: [
+          ...state.pendingVerses,
+          {
+            ...verse,
+            id: crypto.randomUUID(),
+            arrivedAt: Date.now(),
+          },
+        ],
+      };
+    }),
+  removePendingVerse: (id) =>
+    set((state) => ({
+      pendingVerses: state.pendingVerses.filter((v) => v.id !== id),
+    })),
+  clearPendingVerses: () => set({ pendingVerses: [] }),
 }));

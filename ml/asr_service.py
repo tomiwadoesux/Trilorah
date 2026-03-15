@@ -4,6 +4,7 @@ ASR Service - Speech Recognition using Vosk
 Captures microphone audio and outputs transcriptions as JSON lines
 """
 import sys
+import os
 import json
 import queue
 import sounddevice as sd
@@ -20,6 +21,23 @@ from resolver import resolve
 
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 SAMPLE_RATE = 16000
+
+
+def get_audio_device():
+    """Read AUDIODEV env var and find the matching input device index."""
+    audiodev = os.environ.get("AUDIODEV")
+    if not audiodev:
+        return None
+    try:
+        devices = sd.query_devices()
+        for i, dev in enumerate(devices):
+            if dev["max_input_channels"] > 0 and audiodev.lower() in dev["name"].lower():
+                print(json.dumps({"type": "status", "message": f"Using audio device: {dev['name']}"}))
+                return i
+    except Exception as e:
+        print(json.dumps({"type": "warning", "message": f"Could not query devices: {e}"}), file=sys.stderr)
+    return None
+
 
 def main():
     # Check for model
@@ -42,12 +60,14 @@ def main():
     print(json.dumps({"type": "status", "message": "ASR service starting..."}))
 
     try:
+        audio_device = get_audio_device()
         with sd.RawInputStream(
             samplerate=SAMPLE_RATE,
             blocksize=8000,
             dtype='int16',
             channels=1,
-            callback=audio_callback
+            callback=audio_callback,
+            device=audio_device
         ):
             print(json.dumps({"type": "status", "message": "Listening..."}))
             

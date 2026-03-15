@@ -11,16 +11,24 @@ let pythonProcess: ChildProcess | null = null;
  * Start capturing audio and processing through Python Vosk service
  */
 export function startAudioCapture(
-  onText: (text: string, isFinal: boolean) => void
+  onText: (text: string, isFinal: boolean) => void,
+  deviceLabel?: string
 ): void {
   // Path to Python ASR service
   const pythonScript = path.join(__dirname, "..", "..", "ml", "asr_service.py");
 
   console.log("🎤 Starting Python ASR service...");
 
+  // Build environment with AUDIODEV for device selection
+  const spawnEnv = { ...process.env };
+  if (deviceLabel && deviceLabel !== "default") {
+    spawnEnv.AUDIODEV = deviceLabel;
+    console.log(`🎙️ AUDIODEV set to: "${deviceLabel}"`);
+  }
+
   pythonProcess = spawn("python3", [pythonScript], {
     stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env },
+    env: spawnEnv,
   });
 
   pythonProcess.stdout?.on("data", (data: Buffer) => {
