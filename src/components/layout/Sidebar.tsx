@@ -1,12 +1,10 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import {
   Mic,
   List,
   ImageIcon,
   Plus,
   Trash2,
-  Play,
-  Loader2,
   X,
   ChevronDown,
   ChevronRight,
@@ -28,8 +26,6 @@ import type { ServiceItem } from "../../types";
 /* ── Pending Verse Schedule Card ─────────────────────────── */
 function PendingVerseCard({
   verse,
-  isSingle,
-  onAutoComplete,
   onSendToLive,
   onDismiss,
 }: {
@@ -40,48 +36,9 @@ function PendingVerseCard({
     text: string;
     arrivedAt: number;
   };
-  isSingle: boolean;
-  onAutoComplete: () => void;
   onSendToLive: () => void;
   onDismiss: () => void;
 }) {
-  const [progress, setProgress] = useState(0);
-  const onAutoCompleteRef = useRef(onAutoComplete);
-  onAutoCompleteRef.current = onAutoComplete;
-  const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setProgress(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    if (isSingle) {
-      const duration = 4000;
-      const startTime = Date.now();
-      timerRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const pct = Math.min((elapsed / duration) * 100, 100);
-        setProgress(pct);
-        if (pct >= 100) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          onAutoCompleteRef.current();
-        }
-      }, 50);
-    } else {
-      const elapsed = Date.now() - verse.arrivedAt;
-      const remaining = Math.max(6000 - elapsed, 0);
-      timeoutRef.current = setTimeout(() => onDismissRef.current(), remaining);
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [isSingle, verse.id]);
-
   return (
     <div className="p-3 rounded-lg bg-[#111] border border-[#3E9B4F]/20 transition-all">
       <div className="flex justify-between items-start gap-2">
@@ -90,29 +47,26 @@ function PendingVerseCard({
             {verse.ref}
           </span>
           {verse.snippet && (
-            <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1 italic">
+            <p className="text-[10px] text-gray-400 mt-1 line-clamp-3 italic leading-relaxed">
               &ldquo;{verse.snippet}&rdquo;
             </p>
           )}
         </div>
-        <button
-          onClick={onSendToLive}
-          className="shrink-0 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-[#3E9B4F]/20 text-[#3E9B4F] border border-[#3E9B4F]/30 rounded hover:bg-[#3E9B4F]/40 transition-colors"
-        >
-          Send to Live
-        </button>
-      </div>
-      {isSingle && (
-        <div className="mt-2 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
-          <div
-            className="h-full bg-gradient-to-r from-[#3E9B4F] to-[#4fb85f] rounded-full"
-            style={{
-              width: `${progress}%`,
-              transition: "width 75ms linear",
-            }}
-          />
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            onClick={onSendToLive}
+            className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-[#3E9B4F]/20 text-[#3E9B4F] border border-[#3E9B4F]/30 rounded hover:bg-[#3E9B4F]/40 transition-colors"
+          >
+            Push to Live
+          </button>
+          <button
+            onClick={onDismiss}
+            className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-white/5 text-gray-500 border border-white/10 rounded hover:bg-white/10 hover:text-gray-300 transition-colors"
+          >
+            Dismiss
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -666,11 +620,6 @@ export function Sidebar({
               <PendingVerseCard
                 key={pv.id}
                 verse={pv}
-                isSingle={pendingVerses.length === 1}
-                onAutoComplete={() => {
-                  // Progress bar expired — dismiss (user didn't act)
-                  removePendingVerse(pv.id);
-                }}
                 onSendToLive={() => {
                   setLiveVerse({ ref: pv.ref, text: pv.text });
                   setPreviewVerse({ ref: pv.ref, text: pv.text });
@@ -678,7 +627,7 @@ export function Sidebar({
                   removePendingVerse(pv.id);
                   addToHistory(
                     pv.ref,
-                    pv.snippet || pv.text.slice(0, 50),
+                    pv.snippet || pv.text.slice(0, 80),
                   );
                 }}
                 onDismiss={() => removePendingVerse(pv.id)}

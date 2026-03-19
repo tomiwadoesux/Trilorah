@@ -199,9 +199,9 @@ export default function App() {
       )?.[0];
 
       if (bookId !== undefined && listeningMode === "scripture") {
-        setCurrentBook(parseInt(bookId));
-        setCurrentChapter(chapter);
-        setSelectedDeckId(verse);
+        // Don't set currentBook/currentChapter/selectedDeckId here —
+        // that triggers useEffects that auto-push to preview.
+        // Just fetch the verse text and add to the pending schedule.
 
         // Fetch verse text and add to pending schedule
         let verseText = "";
@@ -217,8 +217,8 @@ export default function App() {
         useScriptureStore.getState().addPendingVerse({
           ref,
           snippet:
-            verseText.length > 80
-              ? verseText.slice(0, 80) + "..."
+            verseText.length > 150
+              ? verseText.slice(0, 150) + "..."
               : verseText,
           text: verseText,
         });
@@ -358,7 +358,7 @@ export default function App() {
         useScriptureStore.getState().addPendingVerse({
           ref,
           snippet:
-            text.length > 80 ? text.slice(0, 80) + "..." : text,
+            text.length > 150 ? text.slice(0, 150) + "..." : text,
           text,
         });
       }
@@ -381,26 +381,18 @@ export default function App() {
         data.verses?.map((v: any) => v.text).join(" ") || data.text || "";
 
       // Add to pending queue (progress bar + "Send to Live" button)
+      // Don't set currentBook/currentChapter/selectedDeckId here —
+      // that triggers useEffects that auto-push to preview.
       if (activeTab !== "songs" && activeTab !== "presentations") {
         useScriptureStore.getState().addPendingVerse({
           ref,
           snippet:
-            text.length > 80 ? text.slice(0, 80) + "..." : text,
+            text.length > 150 ? text.slice(0, 150) + "..." : text,
           text,
         });
       }
 
       setDetectedReference(ref);
-
-      const bookId = Object.entries(BOOK_NAMES).find(
-        ([, name]) => name.toLowerCase() === data.book.toLowerCase(),
-      )?.[0];
-
-      if (bookId !== undefined) {
-        setCurrentBook(parseInt(bookId));
-        setCurrentChapter(data.chapter);
-        setSelectedDeckId(data.verse ?? 1);
-      }
 
       setTimeout(() => setDetectedReference(null), 5000);
     });
@@ -409,9 +401,6 @@ export default function App() {
     activeTab,
     listeningMode,
     setDetectedReference,
-    setCurrentBook,
-    setCurrentChapter,
-    setSelectedDeckId,
   ]);
 
   // Effect: Enumerate Audio Devices
