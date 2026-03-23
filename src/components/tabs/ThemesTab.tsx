@@ -27,6 +27,10 @@ export default function ThemesTab() {
     setFontSize,
     textColor,
     setTextColor,
+    fontFamily,
+    setFontFamily,
+    fontWeight,
+    setFontWeight,
   } = useAppStore();
 
   const { selectedItems, handleMultiSelectClick } = useServiceFlowStore();
@@ -97,50 +101,125 @@ export default function ThemesTab() {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a]">
-      {/* Add Custom Theme */}
+      {/* Text Styling */}
       <div className="mb-6">
         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-          Add Custom Background
+          Text Styling
         </h3>
-        <div className="flex gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const url = URL.createObjectURL(file);
-                const isVideo = file.type.startsWith("video/");
-                const newTheme: Theme = {
-                  id: `custom-${Date.now()}`,
-                  name: file.name.split(".")[0],
-                  type: isVideo ? "video" : "image",
-                  url,
-                };
-                addCustomTheme(newTheme);
-              }
+        <div className="flex gap-4 flex-wrap">
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-[10px] text-gray-500 mb-1 block">Effect</label>
+            <select
+              value={selectedTextStyle.id}
+              onChange={(e) => {
+                const style = TEXT_STYLES.find((s) => s.id === e.target.value);
+                if (style) setSelectedTextStyle(style);
+              }}
+              className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#3E9B4F]/50"
+            >
+              {TEXT_STYLES.map((style) => (
+                <option key={style.id} value={style.id}>{style.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 min-w-[120px]">
+            <label className="text-[10px] text-gray-500 mb-1 block">Font</label>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setFontFamily("serif")}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border-2 transition-all ${
+                  fontFamily === "serif"
+                    ? "border-[#3E9B4F] bg-[#3E9B4F]/10 text-white"
+                    : "border-white/10 text-gray-400 hover:border-white/30"
+                }`}
+                style={{ fontFamily: "'Georgia', serif" }}
+              >
+                Serif
+              </button>
+              <button
+                onClick={() => setFontFamily("sans-serif")}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border-2 transition-all ${
+                  fontFamily === "sans-serif"
+                    ? "border-[#3E9B4F] bg-[#3E9B4F]/10 text-white"
+                    : "border-white/10 text-gray-400 hover:border-white/30"
+                }`}
+                style={{ fontFamily: "'Inter', sans-serif" }}
+              >
+                Sans Serif
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[10px] text-gray-500 mb-1 block">
+              Size: {Math.round(fontSize * 100)}%
+            </label>
+            <input
+              type="range"
+              min="0.75"
+              max="2"
+              step="0.05"
+              value={fontSize}
+              onChange={(e) => setFontSize(parseFloat(e.target.value))}
+              className="w-full h-2 bg-[#1a1a1a] rounded-lg appearance-none cursor-pointer accent-[#3E9B4F]"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[10px] text-gray-500 mb-1 block">
+              Thickness: {fontWeight}
+            </label>
+            <input
+              type="range"
+              min="100"
+              max="900"
+              step="100"
+              value={fontWeight}
+              onChange={(e) => setFontWeight(parseInt(e.target.value))}
+              className="w-full h-2 bg-[#1a1a1a] rounded-lg appearance-none cursor-pointer accent-[#3E9B4F]"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[120px]">
+            <label className="text-[10px] text-gray-500 mb-1 block">Color</label>
+            <div className="flex gap-1">
+              {TEXT_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  onClick={() => setTextColor(color.value)}
+                  className={`w-7 h-7 rounded-full border-2 transition-all ${
+                    textColor === color.value
+                      ? "border-[#3E9B4F] scale-110"
+                      : "border-transparent hover:border-white/30"
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 p-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-center">
+          <p
+            style={{
+              fontSize: `${1.25 * fontSize}rem`,
+              textShadow: selectedTextStyle.textShadow,
+              color: textColor,
+              fontFamily:
+                fontFamily === "sans-serif"
+                  ? "'Inter', 'Helvetica Neue', Arial, sans-serif"
+                  : "'Georgia', 'Times New Roman', serif",
+              fontWeight,
             }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-lg hover:border-[#3E9B4F]/50 transition-colors"
           >
-            <ImageIcon size={16} className="text-gray-400" />
-            <span className="text-sm text-gray-300">Add Image</span>
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-lg hover:border-[#3E9B4F]/50 transition-colors"
-          >
-            <Video size={16} className="text-gray-400" />
-            <span className="text-sm text-gray-300">Add Video</span>
-          </button>
+            "For God so loved the world..."
+          </p>
         </div>
       </div>
 
-      {/* Text Layout Styles */}
+      {/* Text Layout */}
       <div className="mb-6">
         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
           Text Layout
@@ -199,74 +278,46 @@ export default function ThemesTab() {
         <p className="text-[10px] text-gray-600 mt-1">{selectedLayout.description}</p>
       </div>
 
-      {/* Text Styling Row */}
+      {/* Add Custom Theme */}
       <div className="mb-6">
         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-          Text Styling
+          Add Custom Theme
         </h3>
-        <div className="flex gap-4 flex-wrap">
-          <div className="flex-1 min-w-[140px]">
-            <label className="text-[10px] text-gray-500 mb-1 block">Effect</label>
-            <select
-              value={selectedTextStyle.id}
-              onChange={(e) => {
-                const style = TEXT_STYLES.find((s) => s.id === e.target.value);
-                if (style) setSelectedTextStyle(style);
-              }}
-              className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#3E9B4F]/50"
-            >
-              {TEXT_STYLES.map((style) => (
-                <option key={style.id} value={style.id}>{style.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-[10px] text-gray-500 mb-1 block">
-              Size: {Math.round(fontSize * 100)}%
-            </label>
-            <input
-              type="range"
-              min="0.75"
-              max="2"
-              step="0.05"
-              value={fontSize}
-              onChange={(e) => setFontSize(parseFloat(e.target.value))}
-              className="w-full h-2 bg-[#1a1a1a] rounded-lg appearance-none cursor-pointer accent-[#3E9B4F]"
-            />
-          </div>
-
-          <div className="flex-1 min-w-[120px]">
-            <label className="text-[10px] text-gray-500 mb-1 block">Color</label>
-            <div className="flex gap-1">
-              {TEXT_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  onClick={() => setTextColor(color.value)}
-                  className={`w-7 h-7 rounded-full border-2 transition-all ${
-                    textColor === color.value
-                      ? "border-[#3E9B4F] scale-110"
-                      : "border-transparent hover:border-white/30"
-                  }`}
-                  style={{ backgroundColor: color.value }}
-                  title={color.name}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 p-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-center">
-          <p
-            style={{
-              fontSize: `${1.25 * fontSize}rem`,
-              textShadow: selectedTextStyle.textShadow,
-              color: textColor,
-              fontFamily: "'Georgia', 'Times New Roman', serif",
+        <div className="flex gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const url = URL.createObjectURL(file);
+                const isVideo = file.type.startsWith("video/");
+                const newTheme: Theme = {
+                  id: `custom-${Date.now()}`,
+                  name: file.name.split(".")[0],
+                  type: isVideo ? "video" : "image",
+                  url,
+                };
+                addCustomTheme(newTheme);
+              }
             }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-lg hover:border-[#3E9B4F]/50 transition-colors"
           >
-            "For God so loved the world..."
-          </p>
+            <ImageIcon size={16} className="text-gray-400" />
+            <span className="text-sm text-gray-300">Add Image</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-3 bg-[#1a1a1a] border border-white/10 rounded-lg hover:border-[#3E9B4F]/50 transition-colors"
+          >
+            <Video size={16} className="text-gray-400" />
+            <span className="text-sm text-gray-300">Add Video</span>
+          </button>
         </div>
       </div>
 

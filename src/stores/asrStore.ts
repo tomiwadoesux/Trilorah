@@ -5,6 +5,7 @@ interface AsrState {
   audioLevel: number;
   currentTranscript: string;
   detectedReference: string | null;
+  detectionError: string | null;
   whisperStatus: string;
   availableDevices: MediaDeviceInfo[];
   selectedDeviceId: string;
@@ -14,6 +15,7 @@ interface AsrState {
   setAudioLevel: (level: number) => void;
   setCurrentTranscript: (transcript: string) => void;
   setDetectedReference: (ref: string | null) => void;
+  setDetectionError: (error: string | null) => void;
   setWhisperStatus: (status: string) => void;
   setAvailableDevices: (devices: MediaDeviceInfo[]) => void;
   setSelectedDeviceId: (id: string) => void;
@@ -24,6 +26,7 @@ export const useAsrStore = create<AsrState>((set) => ({
   audioLevel: -60,
   currentTranscript: "",
   detectedReference: null,
+  detectionError: null,
   whisperStatus: "Initializing...",
   availableDevices: [],
   selectedDeviceId: "default",
@@ -32,6 +35,7 @@ export const useAsrStore = create<AsrState>((set) => ({
   setAudioLevel: (audioLevel) => set({ audioLevel }),
   setCurrentTranscript: (currentTranscript) => set({ currentTranscript }),
   setDetectedReference: (detectedReference) => set({ detectedReference }),
+  setDetectionError: (detectionError) => set({ detectionError }),
   setWhisperStatus: (whisperStatus) => set({ whisperStatus }),
   setAvailableDevices: (availableDevices) => set({ availableDevices }),
   setSelectedDeviceId: (selectedDeviceId) => set({ selectedDeviceId }),

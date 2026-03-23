@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   Mic,
   List,
@@ -23,7 +23,9 @@ import { useScriptureStore } from "../../stores/scriptureStore";
 import { useAsrStore } from "../../stores/asrStore";
 import type { ServiceItem } from "../../types";
 
-/* ── Pending Verse Schedule Card ─────────────────────────── */
+/* ── Pending Verse Schedule Card (8-second auto-dismiss) ── */
+const AUTO_DISMISS_MS = 8000;
+
 function PendingVerseCard({
   verse,
   onSendToLive,
@@ -39,33 +41,78 @@ function PendingVerseCard({
   onSendToLive: () => void;
   onDismiss: () => void;
 }) {
+  const [progress, setProgress] = useState(100);
+  const dismissedRef = useRef(false);
+
+  const handleDismiss = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    onDismiss();
+  }, [onDismiss]);
+
+  useEffect(() => {
+    const elapsed = Date.now() - verse.arrivedAt;
+    const remaining = Math.max(0, AUTO_DISMISS_MS - elapsed);
+
+    // Start progress from wherever we are
+    setProgress((remaining / AUTO_DISMISS_MS) * 100);
+
+    // Auto-dismiss timer
+    const timeout = setTimeout(handleDismiss, remaining);
+
+    // Smooth progress bar update (~30fps)
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const left = Math.max(0, AUTO_DISMISS_MS - (now - verse.arrivedAt));
+      setProgress((left / AUTO_DISMISS_MS) * 100);
+      if (left <= 0) clearInterval(interval);
+    }, 33);
+
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, [verse.arrivedAt, handleDismiss]);
+
   return (
-    <div className="p-3 rounded-lg bg-[#111] border border-[#3E9B4F]/20 transition-all">
-      <div className="flex justify-between items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <span className="text-xs font-bold text-[#3E9B4F]">
-            {verse.ref}
-          </span>
-          {verse.snippet && (
-            <p className="text-[10px] text-gray-400 mt-1 line-clamp-3 italic leading-relaxed">
-              &ldquo;{verse.snippet}&rdquo;
-            </p>
-          )}
+    <div className="rounded-lg bg-[#111] border border-[#3E9B4F]/20 transition-all overflow-hidden">
+      <div className="p-3">
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-bold text-[#3E9B4F]">
+              {verse.ref}
+            </span>
+            {verse.snippet && (
+              <p className="text-[10px] text-gray-400 mt-1 line-clamp-3 italic leading-relaxed">
+                &ldquo;{verse.snippet}&rdquo;
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              onClick={() => {
+                dismissedRef.current = true;
+                onSendToLive();
+              }}
+              className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-[#3E9B4F]/20 text-[#3E9B4F] border border-[#3E9B4F]/30 rounded hover:bg-[#3E9B4F]/40 transition-colors"
+            >
+              Push to Live
+            </button>
+            <button
+              onClick={handleDismiss}
+              className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-white/5 text-gray-500 border border-white/10 rounded hover:bg-white/10 hover:text-gray-300 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-1 shrink-0">
-          <button
-            onClick={onSendToLive}
-            className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-[#3E9B4F]/20 text-[#3E9B4F] border border-[#3E9B4F]/30 rounded hover:bg-[#3E9B4F]/40 transition-colors"
-          >
-            Push to Live
-          </button>
-          <button
-            onClick={onDismiss}
-            className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide bg-white/5 text-gray-500 border border-white/10 rounded hover:bg-white/10 hover:text-gray-300 transition-colors"
-          >
-            Dismiss
-          </button>
-        </div>
+      </div>
+      {/* Countdown progress bar */}
+      <div className="h-[3px] bg-black/40 w-full">
+        <div
+          className="h-full bg-[#3E9B4F] transition-none"
+          style={{ width: `${progress}%` }}
+        />
       </div>
     </div>
   );
@@ -117,6 +164,7 @@ export function Sidebar({
     audioLevel,
     currentTranscript,
     detectedReference,
+    detectionError,
     whisperStatus,
     availableDevices,
     selectedDeviceId,
@@ -576,6 +624,14 @@ export function Sidebar({
                       </div>
                     )}
                   </div>
+
+                  {detectionError && (
+                    <div className="mt-2 px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20">
+                      <span className="text-[10px] font-medium text-red-400">
+                        {detectionError}
+                      </span>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => {

@@ -20,12 +20,26 @@ interface AppState {
   liveVerse: DisplayVerse;
   previewVerse: DisplayVerse;
   showLiveText: boolean;
+
+  // Preview (editing) theme settings
   selectedTheme: Theme;
   customThemes: Theme[];
   selectedLayout: LayoutPreset;
   selectedTextStyle: TextStyle;
   fontSize: number;
   textColor: string;
+  fontFamily: "serif" | "sans-serif";
+  fontWeight: number;
+
+  // Live theme settings (only updated on push)
+  liveTheme: Theme;
+  liveLayout: LayoutPreset;
+  liveTextStyle: TextStyle;
+  liveFontSize: number;
+  liveTextColor: string;
+  liveFontFamily: "serif" | "sans-serif";
+  liveFontWeight: number;
+
   selectedVersion: string;
   showVersionDropdown: boolean;
   elapsedTime: number;
@@ -44,6 +58,8 @@ interface AppState {
   setSelectedTextStyle: (style: TextStyle) => void;
   setFontSize: (size: number) => void;
   setTextColor: (color: string) => void;
+  setFontFamily: (family: "serif" | "sans-serif") => void;
+  setFontWeight: (weight: number) => void;
   setSelectedVersion: (version: string) => void;
   setShowVersionDropdown: (show: boolean) => void;
   setElapsedTime: (time: number) => void;
@@ -59,12 +75,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     text: "And the earth was without form, and void...",
   },
   showLiveText: true,
+
+  // Preview (editing) theme settings
   selectedTheme: DEFAULT_THEMES[0],
   customThemes: [],
   selectedLayout: LAYOUT_PRESETS[0],
   selectedTextStyle: TEXT_STYLES[0],
   fontSize: 1,
   textColor: "#ffffff",
+  fontFamily: "serif",
+  fontWeight: 400,
+
+  // Live theme settings (start with same defaults)
+  liveTheme: DEFAULT_THEMES[0],
+  liveLayout: LAYOUT_PRESETS[0],
+  liveTextStyle: TEXT_STYLES[0],
+  liveFontSize: 1,
+  liveTextColor: "#ffffff",
+  liveFontFamily: "serif",
+  liveFontWeight: 400,
+
   selectedVersion: "KJV",
   showVersionDropdown: false,
   elapsedTime: 0,
@@ -74,8 +104,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLiveVerse: (liveVerse) => set({ liveVerse }),
   setPreviewVerse: (previewVerse) => set({ previewVerse }),
   pushPreviewToLive: () => {
-    const { previewVerse } = get();
-    set({ liveVerse: previewVerse, showLiveText: true });
+    const s = get();
+    set({
+      liveVerse: s.previewVerse,
+      showLiveText: true,
+      liveTheme: s.selectedTheme,
+      liveLayout: s.selectedLayout,
+      liveTextStyle: s.selectedTextStyle,
+      liveFontSize: s.fontSize,
+      liveTextColor: s.textColor,
+      liveFontFamily: s.fontFamily,
+      liveFontWeight: s.fontWeight,
+    });
     window.api?.pushToLive();
   },
   clearLiveText: () => set({ showLiveText: false }),
@@ -90,6 +130,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedTextStyle: (selectedTextStyle) => set({ selectedTextStyle }),
   setFontSize: (fontSize) => set({ fontSize }),
   setTextColor: (textColor) => set({ textColor }),
+  setFontFamily: (fontFamily) => set({ fontFamily }),
+  setFontWeight: (fontWeight) => set({ fontWeight }),
   setSelectedVersion: (selectedVersion) => set({ selectedVersion }),
   setShowVersionDropdown: (showVersionDropdown) => set({ showVersionDropdown }),
   setElapsedTime: (elapsedTime) => set({ elapsedTime }),

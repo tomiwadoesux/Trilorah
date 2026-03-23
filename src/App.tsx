@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TabDeck } from "./components/layout/TabDeck";
 import MonitorBar from "./components/monitors/MonitorBar";
@@ -8,6 +8,10 @@ import { useAsrStore } from "./stores/asrStore";
 import { useSongStore } from "./stores/songStore";
 import { useWhisperTranscription } from "./useWhisperTranscription";
 import { BOOK_NAMES } from "./utils/constants";
+
+/** Matches explicit scripture references like "Genesis 1:4", "Mark 11 35", etc. */
+const VERSE_REGEX =
+  /(Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts?|Romans|Corinthians|Galatians|Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|Philemon|Hebrews|James|Peter|Jude|Revelation)\s*(?:chapter\s*)?(\d+)(?:\s*(?:verse|:|\s)\s*(\d+))?/i;
 import NotificationTray from "./components/ui/NotificationTray";
 import {
   normalizeLyrics,
@@ -56,6 +60,7 @@ export default function App() {
     setAudioLevel,
     setCurrentTranscript,
     setDetectedReference,
+    setDetectionError,
     setWhisperStatus,
   } = useAsrStore();
 
@@ -82,6 +87,10 @@ export default function App() {
   const autoAdvanceLockedRef = useRef(false);
   const pendingAdvanceRef = useRef(false);
   const catchUpCooldownRef = useRef(false);
+  // Persists across partial transcripts so the IPC handler can still read it
+  // even after Deepgram overwrites currentTranscript with a new partial.
+  const lastTranscriptWasExplicitRef = useRef(false);
+  const explicitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Effect: Cursor blink CSS
   useEffect(() => {
@@ -182,10 +191,8 @@ export default function App() {
     }
   }, [selectedDeckId, chapterVerses, setPreviewVerse]);
 
-  // Function: Detect verse from transcript
+  // Function: Detect verse from transcript (used by manual text input only)
   const detectVerseFromTranscript = async (text: string) => {
-    const VERSE_REGEX =
-      /(Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts?|Romans|Corinthians|Galatians|Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|Philemon|Hebrews|James|Peter|Jude|Revelation)\s*(?:chapter\s*)?(\d+)(?:\s*(?:verse|:|\s)\s*(\d+))?/i;
     const match = text.match(VERSE_REGEX);
     if (match) {
       const [, bookName, chapterStr, verseStr] = match;
@@ -194,34 +201,44 @@ export default function App() {
       const ref = `${bookName} ${chapter}:${verse}`;
 
       setDetectedReference(ref);
+
       const bookId = Object.entries(BOOK_NAMES).find(
         ([, name]) => name.toLowerCase() === bookName.toLowerCase(),
       )?.[0];
 
       if (bookId !== undefined && listeningMode === "scripture") {
-        // Don't set currentBook/currentChapter/selectedDeckId here —
-        // that triggers useEffects that auto-push to preview.
-        // Just fetch the verse text and add to the pending schedule.
-
-        // Fetch verse text and add to pending schedule
-        let verseText = "";
         try {
           const result = await window.api.getChapter(
             parseInt(bookId),
             chapter,
           );
-          const verseData = result?.data?.find((v: any) => v.id === verse);
-          verseText = verseData?.text || "";
-        } catch {}
 
-        useScriptureStore.getState().addPendingVerse({
-          ref,
-          snippet:
-            verseText.length > 150
-              ? verseText.slice(0, 150) + "..."
-              : verseText,
-          text: verseText,
-        });
+          if (!result?.data || result.data.length === 0) {
+            setDetectionError(`Chapter ${chapter} not found in ${bookName}`);
+            setTimeout(() => setDetectionError(null), 3000);
+            setTimeout(() => setDetectedReference(null), 3000);
+            return;
+          }
+
+          const verseData = result.data.find((v: any) => v.id === verse);
+          if (!verseData) {
+            setDetectionError(`Verse ${verse} not found in ${bookName} ${chapter}`);
+            setTimeout(() => setDetectionError(null), 3000);
+            setTimeout(() => setDetectedReference(null), 3000);
+            return;
+          }
+
+          const verseText = verseData.text;
+          setPreviewVerse({ ref, text: verseText });
+          setCurrentBook(parseInt(bookId));
+          setCurrentChapter(chapter);
+          setSelectedDeckId(verse);
+
+          useScriptureStore.getState().addToHistory(ref, verseText.slice(0, 80));
+        } catch {
+          setDetectionError(`Could not look up ${ref}`);
+          setTimeout(() => setDetectionError(null), 3000);
+        }
 
         setTimeout(() => setDetectedReference(null), 3000);
       }
@@ -240,6 +257,17 @@ export default function App() {
 
   const handleWhisperTranscript = (text: string) => {
     setCurrentTranscript(text);
+
+    // Track whether this transcript contains an explicit reference.
+    // This flag persists so the IPC handler can still read it even after
+    // Deepgram overwrites currentTranscript with a new partial.
+    if (VERSE_REGEX.test(text)) {
+      lastTranscriptWasExplicitRef.current = true;
+      if (explicitTimerRef.current) clearTimeout(explicitTimerRef.current);
+      explicitTimerRef.current = setTimeout(() => {
+        lastTranscriptWasExplicitRef.current = false;
+      }, 10000);
+    }
 
     if (
       activeTab === "songs" &&
@@ -337,71 +365,94 @@ export default function App() {
     deviceLabel: selectedDeviceLabel,
   });
 
-  // Effect: Listen for AI Verse Detections — adds to pending schedule
+  // Helper: route a verse detection from the backend.
+  // If the current transcript contains an explicit reference (e.g. "Nehemiah 2:1"),
+  // send to preview. Otherwise (quote match) → add to pending queue.
+  const routeVerseDetection = useCallback(
+    (data: any) => {
+      const ref =
+        data.endVerse && data.endVerse !== data.verse
+          ? `${data.book} ${data.chapter}:${data.verse}-${data.endVerse}`
+          : `${data.book} ${data.chapter}:${data.verse}`;
+
+      const text =
+        data.verses?.map((v: any) => v.text).join(" ") || data.text || "";
+
+      // Check if a recent transcript contained an explicit book+chapter reference.
+      // We use a persistent ref because by the time this IPC handler fires,
+      // Deepgram may have already overwritten currentTranscript with a new partial.
+      const isExplicit = lastTranscriptWasExplicitRef.current;
+
+      if (isExplicit) {
+        // Consume the flag so the next detection (e.g. quote) routes correctly
+        lastTranscriptWasExplicitRef.current = false;
+
+        // Explicit reference → send straight to preview
+        setDetectedReference(ref);
+        setTimeout(() => setDetectedReference(null), 3000);
+
+        if (!text || text.includes("not found")) {
+          setDetectionError(`Verse not found in the Bible`);
+          setTimeout(() => setDetectionError(null), 3000);
+          return;
+        }
+
+        const versePayload = { ref, text };
+        setPreviewVerse(versePayload);
+
+        // Update scripture tab
+        const bookId = Object.entries(BOOK_NAMES).find(
+          ([, name]) => name.toLowerCase() === data.book.toLowerCase(),
+        )?.[0];
+        if (bookId !== undefined) {
+          setCurrentBook(parseInt(bookId));
+          setCurrentChapter(data.chapter);
+          setSelectedDeckId(data.verse);
+        }
+
+        useScriptureStore.getState().addToHistory(ref, text.slice(0, 80));
+      } else {
+        // Quote match → add to pending queue
+        if (activeTab !== "songs" && activeTab !== "presentations") {
+          useScriptureStore.getState().addPendingVerse({
+            ref,
+            snippet: text.length > 150 ? text.slice(0, 150) + "..." : text,
+            text,
+          });
+        }
+      }
+    },
+    [
+      activeTab,
+      setDetectedReference,
+      setDetectionError,
+      setPreviewVerse,
+      setCurrentBook,
+      setCurrentChapter,
+      setSelectedDeckId,
+    ],
+  );
+
+  // Effect: Listen for AI Verse Detections
   useEffect(() => {
     if (!window.api?.onVerseDetected) return;
     const cleanup = window.api.onVerseDetected((data: any) => {
       if (listeningMode !== "scripture") return;
-
-      const ref =
-        data.endVerse && data.endVerse !== data.verse
-          ? `${data.book} ${data.chapter}:${data.verse}-${data.endVerse}`
-          : `${data.book} ${data.chapter}:${data.verse}`;
-      const text =
-        data.verses?.map((v: any) => v.text).join(" ") || data.text || "";
-
-      if (
-        !data.isPreview &&
-        activeTab !== "songs" &&
-        activeTab !== "presentations"
-      ) {
-        useScriptureStore.getState().addPendingVerse({
-          ref,
-          snippet:
-            text.length > 150 ? text.slice(0, 150) + "..." : text,
-          text,
-        });
-      }
+      if (data.isPreview) return; // handled by onVersePreview
+      routeVerseDetection(data);
     });
     return cleanup;
-  }, [activeTab, listeningMode]);
+  }, [listeningMode, routeVerseDetection]);
 
-  // Effect: Listen for AI Verse PREVIEW — adds to pending schedule
+  // Effect: Listen for AI Verse PREVIEW
   useEffect(() => {
     if (!window.api?.onVersePreview) return;
     const cleanup = window.api.onVersePreview((data: any) => {
       if (listeningMode !== "scripture") return;
-
-      const ref =
-        data.endVerse && data.endVerse !== data.verse
-          ? `${data.book} ${data.chapter}:${data.verse}-${data.endVerse}`
-          : `${data.book} ${data.chapter}:${data.verse}`;
-
-      const text =
-        data.verses?.map((v: any) => v.text).join(" ") || data.text || "";
-
-      // Add to pending queue (progress bar + "Send to Live" button)
-      // Don't set currentBook/currentChapter/selectedDeckId here —
-      // that triggers useEffects that auto-push to preview.
-      if (activeTab !== "songs" && activeTab !== "presentations") {
-        useScriptureStore.getState().addPendingVerse({
-          ref,
-          snippet:
-            text.length > 150 ? text.slice(0, 150) + "..." : text,
-          text,
-        });
-      }
-
-      setDetectedReference(ref);
-
-      setTimeout(() => setDetectedReference(null), 5000);
+      routeVerseDetection(data);
     });
     return cleanup;
-  }, [
-    activeTab,
-    listeningMode,
-    setDetectedReference,
-  ]);
+  }, [listeningMode, routeVerseDetection]);
 
   // Effect: Enumerate Audio Devices
   useEffect(() => {
@@ -432,6 +483,16 @@ export default function App() {
     const cleanup = window.api.onTranscriptUpdate((text: string) => {
       if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
       setCurrentTranscript(text);
+
+      // Track explicit references for the IPC handler
+      if (VERSE_REGEX.test(text)) {
+        lastTranscriptWasExplicitRef.current = true;
+        if (explicitTimerRef.current) clearTimeout(explicitTimerRef.current);
+        explicitTimerRef.current = setTimeout(() => {
+          lastTranscriptWasExplicitRef.current = false;
+        }, 10000);
+      }
+
       transcriptTimerRef.current = setTimeout(() => {
         setCurrentTranscript("");
       }, 8000);
